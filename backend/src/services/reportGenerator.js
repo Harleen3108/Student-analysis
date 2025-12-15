@@ -562,7 +562,8 @@ class ReportGenerator {
       const filePath = path.join(this.reportsDir, filename);
 
       const doc = new PDFDocument({ margin: 50 });
-      doc.pipe(fs.createWriteStream(filePath));
+      const writeStream = fs.createWriteStream(filePath);
+      doc.pipe(writeStream);
 
       // Header
       doc.fontSize(20).text(reportData.title, { align: "center" });
@@ -598,11 +599,19 @@ class ReportGenerator {
 
       doc.end();
 
+      // Wait until the file has been fully written before checking its size
+      await new Promise((resolve, reject) => {
+        writeStream.on("finish", resolve);
+        writeStream.on("error", reject);
+      });
+
+      const stats = fs.statSync(filePath);
+
       return {
         filename,
         filePath,
         type: "pdf",
-        size: fs.statSync(filePath).size
+        size: stats.size
       };
     } catch (error) {
       logger.error("PDF generation error:", error);

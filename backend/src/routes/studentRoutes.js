@@ -113,31 +113,140 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
 
     // Process each student record
     for (let i = 0; i < studentsData.length; i++) {
-      const row = studentsData[i];
-      
+      const rawRow = studentsData[i];
+
       try {
-        // Validate required fields
-        if (!row.firstName || !row.lastName || !row.rollNumber) {
-          throw new Error('Missing required fields: firstName, lastName, rollNumber');
+        // Normalize keys to be case-insensitive and whitespace-safe
+        const row = {};
+        Object.keys(rawRow || {}).forEach((key) => {
+          if (!key) return;
+          const trimmed = key.trim();
+          const lower = trimmed.toLowerCase();
+          const noSpace = lower.replace(/\s+/g, '');
+          row[trimmed] = rawRow[key];
+          row[lower] = rawRow[key];
+          row[noSpace] = rawRow[key];
+        });
+
+        const getField = (...keys) => {
+          for (const key of keys) {
+            if (!key) continue;
+            const variants = [
+              key,
+              key.toLowerCase(),
+              key.toLowerCase().replace(/\s+/g, ''),
+              key.replace(/[()%]/g, '').toLowerCase(), // Remove () and % for matching
+              key.replace(/[()%]/g, '').toLowerCase().replace(/\s+/g, ''),
+            ];
+            for (const v of variants) {
+              if (row[v] !== undefined && row[v] !== '') {
+                return row[v];
+              }
+            }
+          }
+          return undefined;
+        };
+
+        // Handle misaligned columns: check common mismatched header names
+        // If "Risk" column has numeric data, it's likely attendance %
+        // If "Academic Score (%)" has text like "Low/Medium/High", it's likely risk level
+        // If "Roll no." has numeric data but not sequential 1,2,3, it might be academic score
+
+        // Support both "firstName"/"lastName" and combined "name" field
+        let firstName = getField('firstName', 'firstname');
+        let lastName = getField('lastName', 'lastname');
+
+        const fullName = getField('name', 'studentName', 'student name');
+        if (!firstName && !lastName && fullName) {
+          const nameParts = String(fullName).trim().split(' ');
+          firstName = nameParts[0];
+          lastName = nameParts.slice(1).join(' ') || 'Student';
+        }
+
+        // Generate a roll number if not provided
+        let rollNumber = getField('rollNumber', 'rollno', 'roll', 'roll number', 'Roll no.');
+        
+        // Check for roll number in unheaded column (xlsx creates keys like "__EMPTY", "__EMPTY_1", etc.)
+        if (!rollNumber) {
+          // Check all keys for unheaded columns (usually start with __EMPTY)
+          const emptyKeys = Object.keys(row).filter(k => k.startsWith('__EMPTY') || k === '' || !k.trim());
+          for (const key of emptyKeys) {
+            const value = row[key];
+            // If it's a simple sequential number (1, 2, 3...), likely roll number
+            if (value !== undefined && value !== '' && !isNaN(Number(value)) && Number(value) <= 100) {
+              rollNumber = value.toString();
+              logger.info(`⚠️ Found roll number in unheaded column: ${rollNumber}`);
+              break;
+            }
+          }
+        }
+        
+        if (!rollNumber) {
+          // Use class (e.g., 10A) + index-based suffix to keep it readable
+          const classCode = (getField('class', 'section', 'Class', 'Section') || '10A')
+            .toString()
+            .toUpperCase()
+            .replace(/\s+/g, '');
+          rollNumber = `ST${classCode}${Date.now()}_${i}`;
+        }
+
+        // Debug logging for first row to help troubleshoot
+        if (i === 0) {
+          logger.info(`📋 First row sample - Raw keys: ${Object.keys(rawRow).join(', ')}`);
+          logger.info(`📋 Raw row values: ${JSON.stringify(rawRow)}`);
+        }
+
+        if (!firstName || !lastName) {
+          throw new Error('Missing required fields: name / firstName + lastName');
         }
 
         // Check for duplicate roll number
-        const existingStudent = await Student.findOne({ 
-          rollNumber: row.rollNumber.toString().toUpperCase() 
+        const existingStudent = await Student.findOne({
+          rollNumber: rollNumber.toString().toUpperCase()
         });
-        
+
         if (existingStudent) {
-          throw new Error(`Roll number ${row.rollNumber} already exists`);
+          throw new Error(`Roll number ${rollNumber} already exists`);
         }
 
-        // Get attendance and academic data from CSV
-        const attendancePercentage = row.attendance !== undefined ? Number(row.attendance) : 100;
-        const overallPercentage = row.academicScore !== undefined ? Number(row.academicScore) : 0;
-        
-        // Calculate risk level based on attendance and academic performance
+        // Get attendance - check both correct column and misaligned "Risk" column
+        let attendanceRaw = getField('attendance', 'Attendance', 'attendance%', 'Attendance %');
+        // If attendance column is empty but "Risk" column has numeric data, use that
+        if ((!attendanceRaw || attendanceRaw === '') && row['Risk']) {
+          const riskColValue = row['Risk'];
+          // Check if it's a number (likely attendance % in wrong column)
+          if (!isNaN(Number(riskColValue)) && riskColValue !== '') {
+            attendanceRaw = riskColValue;
+            logger.info(`⚠️ Found attendance data in "Risk" column: ${attendanceRaw}`);
+          }
+        }
+        const attendancePercentage =
+          attendanceRaw !== undefined && attendanceRaw !== ''
+            ? Number(attendanceRaw)
+            : 100;
+
+        // Get academic score - check both correct column and misaligned "Roll no." column
+        let academicRaw = getField('academicScore', 'academic score', 'Academic Score', 'overallPercentage', 'overall percentage', 'Academic Score (%)');
+        // If academic column is empty but "Roll no." has numeric data (not sequential 1,2,3), use that
+        if ((!academicRaw || academicRaw === '') && row['Roll no.']) {
+          const rollColValue = row['Roll no.'];
+          // Check if it's a number and not a simple sequential roll number
+          if (!isNaN(Number(rollColValue)) && rollColValue !== '' && Number(rollColValue) > 10) {
+            academicRaw = rollColValue;
+            logger.info(`⚠️ Found academic score data in "Roll no." column: ${academicRaw}`);
+          }
+        }
+        const overallPercentage =
+          academicRaw !== undefined && academicRaw !== ''
+            ? Number(academicRaw)
+            : 0;
+
+        // Calculate risk based on attendance/academic, but allow overrides from:
+        // - textual level (risk/riskLevel)
+        // - numeric percent (risk% / riskPercentage / risk score)
         let riskScore = 0;
         let riskLevel = 'Low';
-        
+
         if (attendancePercentage < 70 || overallPercentage < 50) {
           riskScore = Math.max(100 - attendancePercentage, 100 - overallPercentage);
           if (riskScore >= 80) riskLevel = 'Critical';
@@ -146,13 +255,62 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
           else riskLevel = 'Low';
         }
 
+        // Check for numeric risk percentage from file
+        const riskPercentRaw = getField('risk%', 'riskpercent', 'risk percentage', 'riskpercentage', 'riskscore', 'risk score');
+        if (riskPercentRaw !== undefined && riskPercentRaw !== '') {
+          const numericRisk = Number(riskPercentRaw);
+          if (!Number.isNaN(numericRisk)) {
+            riskScore = numericRisk;
+            if (numericRisk >= 80) riskLevel = 'Critical';
+            else if (numericRisk >= 60) riskLevel = 'High';
+            else if (numericRisk >= 40) riskLevel = 'Medium';
+            else riskLevel = 'Low';
+          }
+        }
+
+        // Get risk level - check "Academic Score (%)" column for text risk levels (misaligned data)
+        // The "Risk" column actually contains attendance %, so skip it for risk level
+        let explicitRisk = null;
+        
+        // Check Academic Score (%) column for text risk levels (Medium, High, Low, etc.)
+        const academicScoreColValue = row['Academic Score (%)'] || row['Academic Score'] || row['academic score (%)'];
+        if (academicScoreColValue && isNaN(Number(academicScoreColValue))) {
+          // It's text, likely a risk level
+          explicitRisk = academicScoreColValue;
+          logger.info(`⚠️ Found risk level data in "Academic Score (%)" column: ${explicitRisk}`);
+        }
+        
+        // Also check standard risk column names (in case file is correctly formatted)
+        if (!explicitRisk) {
+          explicitRisk = getField('risk', 'riskLevel', 'risk level');
+        }
+        
+        if (explicitRisk) {
+          const normalized = String(explicitRisk).trim().toLowerCase();
+          if (['low', 'medium', 'high', 'critical'].includes(normalized)) {
+            riskLevel = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+            // Set risk score based on level if we have level but not numeric score
+            if (!riskPercentRaw || riskPercentRaw === '') {
+              if (riskLevel === 'Critical') riskScore = 85;
+              else if (riskLevel === 'High') riskScore = 65;
+              else if (riskLevel === 'Medium') riskScore = 45;
+              else riskScore = 20;
+            }
+          }
+        }
+
+        // Debug logging after extraction
+        if (i === 0) {
+          logger.info(`✅ Extracted values - Name: ${firstName} ${lastName}, Roll: ${rollNumber}, Class: ${getField('class', 'section')}, Attendance: ${attendancePercentage}%, Academic: ${overallPercentage}%, Risk: ${riskLevel} (${riskScore})`);
+        }
+
         // Create student data
         const studentData = {
-          firstName: row.firstName.trim(),
-          lastName: row.lastName.trim(),
-          rollNumber: row.rollNumber.toString().toUpperCase().trim(),
+          firstName: String(firstName).trim(),
+          lastName: String(lastName).trim(),
+          rollNumber: rollNumber.toString().toUpperCase().trim(),
           admissionNumber: row.admissionNumber || `ADM${Date.now()}_${i}`,
-          section: row.class || row.section || '10A',
+          section: getField('class', 'section') || '10A',
           email: row.email?.toLowerCase().trim(),
           phone: row.phone?.toString().trim(),
           dateOfBirth: row.dateOfBirth ? new Date(row.dateOfBirth) : new Date('2010-01-01'),
@@ -175,10 +333,10 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
           familyIncomeLevel: 'Middle Income',
           distanceFromSchool: 5,
           transportationMode: 'School Bus',
-          attendancePercentage: attendancePercentage,
-          overallPercentage: overallPercentage,
-          riskScore: riskScore,
-          riskLevel: riskLevel,
+          attendancePercentage,
+          overallPercentage,
+          riskScore,
+          riskLevel,
           status: 'Active',
           isActive: true
         };
@@ -269,7 +427,7 @@ router.get('/', async (req, res) => {
 
     // Execute query with pagination
     const students = await Student.find(query)
-      .select('firstName lastName rollNumber section attendancePercentage overallPercentage riskLevel riskScore email phone status')
+      .select('firstName lastName rollNumber section attendancePercentage overallPercentage riskLevel riskScore email phone status photo')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -293,7 +451,8 @@ router.get('/', async (req, res) => {
       riskScore: student.riskScore || 0,
       email: student.email,
       phone: student.phone,
-      status: student.status
+      status: student.status,
+      photo: student.photo
     }));
 
     res.json({
@@ -342,6 +501,7 @@ router.get('/:id', async (req, res) => {
       email: student.email,
       phone: student.phone,
       status: student.status,
+      photo: student.photo,
       // Include additional details for detailed view
       dateOfBirth: student.dateOfBirth,
       gender: student.gender,
@@ -371,8 +531,17 @@ router.post('/', async (req, res) => {
     
     logger.info(`Creating student: ${firstName} ${lastName} (${rollNumber})`);
     
+    // Validate required fields
+    if (!firstName || !lastName || !rollNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'First name, last name, and roll number are required'
+      });
+    }
+
     // Check if roll number already exists
-    const existingStudent = await Student.findOne({ rollNumber: rollNumber.toUpperCase() });
+    const rollNumberUpper = rollNumber.toString().toUpperCase().trim();
+    const existingStudent = await Student.findOne({ rollNumber: rollNumberUpper });
     if (existingStudent) {
       logger.warn(`Duplicate roll number: ${rollNumber}`);
       return res.status(400).json({
@@ -382,7 +551,7 @@ router.post('/', async (req, res) => {
     }
 
     // Create new student with comprehensive data
-    const sectionName = section || studentClass || '10A'; // Default section
+    const sectionName = (section || studentClass || '10A').toString().toUpperCase(); // Default section
     const attendancePercentage = attendance !== undefined ? Number(attendance) : 100;
     const overallPercentage = academicScore !== undefined ? Number(academicScore) : 0;
     
@@ -398,29 +567,43 @@ router.post('/', async (req, res) => {
       else riskLevel = 'Low';
     }
     
+    // Handle address - ensure required fields are present
+    const studentAddress = {
+      city: address?.city || 'Unknown',
+      state: address?.state || 'Unknown',
+      pincode: address?.pincode || '000000',
+      street: address?.street || ''
+    };
+
+    // Handle father data - ensure required fields
+    const fatherData = {
+      name: father?.name || 'Father Name',
+      phone: father?.phone || phone || '0000000000',
+      email: father?.email || email || '',
+      occupation: father?.occupation || ''
+    };
+
+    // Handle mother data - ensure required fields
+    const motherData = {
+      name: mother?.name || 'Mother Name',
+      phone: mother?.phone || phone || '0000000000',
+      email: mother?.email || '',
+      occupation: mother?.occupation || ''
+    };
+    
     const studentData = {
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      rollNumber: rollNumber.toUpperCase().trim(),
+      firstName: firstName.toString().trim(),
+      lastName: lastName.toString().trim(),
+      rollNumber: rollNumberUpper,
       admissionNumber: `ADM${Date.now()}`, // Auto-generate admission number
       section: sectionName,
-      email: email?.toLowerCase().trim(),
-      phone: phone?.trim(),
-      dateOfBirth: dateOfBirth || new Date('2010-01-01'), // Default DOB
+      email: email ? email.toLowerCase().trim() : undefined,
+      phone: phone ? phone.toString().trim() : undefined,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date('2010-01-01'), // Default DOB
       gender: gender || 'Male',
-      address: address || {
-        city: 'Unknown',
-        state: 'Unknown',
-        pincode: '000000'
-      },
-      father: father || {
-        name: 'Father Name',
-        phone: phone || '0000000000'
-      },
-      mother: mother || {
-        name: 'Mother Name',
-        phone: phone || '0000000000'
-      },
+      address: studentAddress,
+      father: fatherData,
+      mother: motherData,
       familyIncomeLevel: 'Middle Income',
       distanceFromSchool: 5,
       transportationMode: 'School Bus',
@@ -436,23 +619,31 @@ router.post('/', async (req, res) => {
     };
 
     const newStudent = new Student(studentData);
-    const savedStudent = await newStudent.save();
+    const savedStudent = await newStudent.save().catch((saveError) => {
+      logger.error('❌ Validation error saving student:', saveError);
+      // Extract validation error message
+      if (saveError.name === 'ValidationError') {
+        const errors = Object.values(saveError.errors).map(err => err.message);
+        throw new Error(`Validation failed: ${errors.join(', ')}`);
+      }
+      throw saveError;
+    });
 
     logger.info(`✅ Student saved to database: ${savedStudent.rollNumber}`);
 
     // *** AUTO-CREATE PARENT ACCOUNT ***
     let parentAccount = null;
-    if (createParentAccount !== false && father && father.email) {
+    if (createParentAccount !== false && fatherData && fatherData.email) {
       try {
         // Check if parent account already exists
-        const existingParent = await User.findOne({ email: father.email.toLowerCase() });
+        const existingParent = await User.findOne({ email: fatherData.email.toLowerCase() });
         
         if (existingParent) {
           // Link student to existing parent
           if (!existingParent.children.includes(savedStudent._id)) {
             existingParent.children.push(savedStudent._id);
             await existingParent.save();
-            logger.info(`✅ Student linked to existing parent: ${father.email}`);
+            logger.info(`✅ Student linked to existing parent: ${fatherData.email}`);
           }
           parentAccount = {
             email: existingParent.email,
@@ -463,11 +654,11 @@ router.post('/', async (req, res) => {
           // Password: FirstName2025 (e.g., John2025)
           const parentPassword = `${firstName}2025`;
           
-          const parentData = {
-            firstName: father.name.split(' ')[0] || 'Parent',
-            lastName: father.name.split(' ').slice(1).join(' ') || lastName,
-            email: father.email.toLowerCase(),
-            phone: father.phone || phone || '0000000000',
+          const newParentData = {
+            firstName: fatherData.name.split(' ')[0] || 'Parent',
+            lastName: fatherData.name.split(' ').slice(1).join(' ') || lastName,
+            email: fatherData.email.toLowerCase(),
+            phone: fatherData.phone || phone || '0000000000',
             password: parentPassword,
             role: 'parent',
             children: [savedStudent._id],
@@ -479,13 +670,13 @@ router.post('/', async (req, res) => {
             }
           };
 
-          const newParent = new User(parentData);
+          const newParent = new User(newParentData);
           await newParent.save();
           
-          logger.info(`✅ Parent account created: ${father.email} with password: ${parentPassword}`);
+          logger.info(`✅ Parent account created: ${fatherData.email} with password: ${parentPassword}`);
           
           parentAccount = {
-            email: father.email,
+            email: fatherData.email,
             password: parentPassword,
             existed: false
           };
@@ -494,22 +685,22 @@ router.post('/', async (req, res) => {
           try {
             const { sendEmail } = await import('../services/emailService.js');
             await sendEmail({
-              to: father.email,
+              to: fatherData.email,
               subject: 'Parent Account Created - Student Dropout Prevention System',
               html: `
                 <h2>Welcome to Student Dropout Prevention System</h2>
-                <p>Dear ${father.name},</p>
+                <p>Dear ${fatherData.name},</p>
                 <p>A parent account has been created for you to monitor your child's progress.</p>
                 <p><strong>Login Credentials:</strong></p>
-                <p>Email: ${father.email}</p>
+                <p>Email: ${fatherData.email}</p>
                 <p>Password: ${parentPassword}</p>
                 <p><strong>Student:</strong> ${firstName} ${lastName} (${rollNumber})</p>
                 <p>Please login at: <a href="${process.env.FRONTEND_URL}/login">${process.env.FRONTEND_URL}/login</a></p>
                 <p>We recommend changing your password after first login.</p>
               `,
-              text: `Welcome! Your login: ${father.email} / ${parentPassword}`
+              text: `Welcome! Your login: ${fatherData.email} / ${parentPassword}`
             });
-            logger.info(`✅ Welcome email sent to parent: ${father.email}`);
+            logger.info(`✅ Welcome email sent to parent: ${fatherData.email}`);
           } catch (emailError) {
             logger.error('❌ Failed to send welcome email:', emailError);
           }
@@ -533,7 +724,8 @@ router.post('/', async (req, res) => {
       riskScore: savedStudent.riskScore,
       email: savedStudent.email,
       phone: savedStudent.phone,
-      status: savedStudent.status
+      status: savedStudent.status,
+      photo: savedStudent.photo
     };
 
     // *** CRITICAL: Emit socket event for real-time updates ***
@@ -565,10 +757,15 @@ router.post('/', async (req, res) => {
     
   } catch (error) {
     logger.error('❌ Error creating student:', error);
-    res.status(500).json({
+    logger.error('Error details:', error.stack);
+    
+    // Return more specific error messages
+    const statusCode = error.name === 'ValidationError' || error.message.includes('Validation') ? 400 : 500;
+    
+    res.status(statusCode).json({
       success: false,
-      message: 'Failed to create student',
-      error: error.message
+      message: error.message || 'Failed to create student',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -579,14 +776,33 @@ router.put('/:id', async (req, res) => {
     const studentId = req.params.id;
     const updateData = { ...req.body };
     
+    logger.info(`🔄 Update request received for student: ${studentId}`);
+    logger.info(`📦 Update data keys:`, Object.keys(updateData));
+    logger.info(`📦 Update data (without photo):`, { ...updateData, photo: updateData.photo ? '[BASE64 IMAGE]' : undefined });
+    
     // Remove fields that shouldn't be updated directly
     delete updateData.id;
     delete updateData._id;
     
     // Handle class/section mapping - use class value for section field
-    if (updateData.class !== undefined) {
-      updateData.section = updateData.class;
+    if (updateData.class !== undefined && updateData.class) {
+      updateData.section = updateData.class.toString().toUpperCase();
       delete updateData.class; // Remove class field as it's an ObjectId reference in the model
+    }
+    
+    // Handle photo update if present - only update if photo field is explicitly provided
+    if (updateData.photo !== undefined) {
+      // If photo is a string (base64), convert to object format
+      if (typeof updateData.photo === 'string' && updateData.photo && updateData.photo.trim()) {
+        updateData.photo = { url: updateData.photo.trim() };
+        logger.info(`📸 Photo will be updated (base64 string)`);
+      } else if (!updateData.photo) {
+        // If photo is empty/null, don't update it (keep existing)
+        delete updateData.photo;
+        logger.info(`📸 Photo will not be updated (keeping existing)`);
+      }
+    } else {
+      logger.info(`📸 Photo not included in update (keeping existing)`);
     }
     
     // Handle attendance and academic score updates with risk recalculation
@@ -602,6 +818,7 @@ router.put('/:id', async (req, res) => {
     // Always recalculate risk when updating student data
     const currentStudent = await Student.findById(studentId);
     if (!currentStudent) {
+      logger.error(`❌ Student not found: ${studentId}`);
       return res.status(404).json({
         success: false,
         message: 'Student not found'
@@ -628,12 +845,13 @@ router.put('/:id', async (req, res) => {
     updateData.riskScore = riskScore;
     updateData.riskLevel = riskLevel;
     
-    logger.info(`Updating student: ${studentId} with data:`, updateData);
+    logger.info(`📊 Risk calculated: score=${riskScore}, level=${riskLevel}`);
+    logger.info(`💾 Final update data (without photo):`, { ...updateData, photo: updateData.photo ? '[BASE64 IMAGE]' : undefined });
     
     // Update student in MongoDB
     const updatedStudent = await Student.findByIdAndUpdate(
       studentId,
-      { ...updateData, lastUpdatedBy: req.user?.id },
+      { ...updateData },
       { new: true, runValidators: true }
     ).lean();
     
@@ -657,7 +875,8 @@ router.put('/:id', async (req, res) => {
       riskScore: updatedStudent.riskScore,
       email: updatedStudent.email,
       phone: updatedStudent.phone,
-      status: updatedStudent.status
+      status: updatedStudent.status,
+      photo: updatedStudent.photo
     };
 
     logger.info(`Student updated: ${updatedStudent.rollNumber}`);
