@@ -22,6 +22,7 @@ const Students = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false)
   const [selectedStudent, setSelectedStudent] = useState(null)
+  const [selectedStudentIds, setSelectedStudentIds] = useState([])
   const queryClient = useQueryClient()
   const { socket, isConnected } = useSocket()
   const menuRef = useRef(null)
@@ -220,6 +221,50 @@ const Students = () => {
     }
   }
 
+  const toggleStudentSelection = (studentId) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(studentId)
+        ? prev.filter((id) => id !== studentId)
+        : [...prev, studentId]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    if (!students || students.length === 0) return
+    const allIds = students.map((s) => s.id)
+    const allSelected = allIds.every((id) => selectedStudentIds.includes(id))
+    if (allSelected) {
+      setSelectedStudentIds([])
+    } else {
+      setSelectedStudentIds(allIds)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedStudentIds.length === 0) {
+      toast.error('No students selected')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedStudentIds.length} selected student(s)?`
+    )
+    if (!confirmed) return
+
+    try {
+      for (const id of selectedStudentIds) {
+        await studentsAPI.delete(id)
+      }
+      toast.success('Selected students deleted successfully!')
+      setSelectedStudentIds([])
+      queryClient.invalidateQueries(['students'])
+      await refetch()
+    } catch (error) {
+      console.error('Bulk delete error:', error)
+      toast.error('Failed to delete some selected students')
+    }
+  }
+
   const getRiskBadgeColor = (riskLevel) => {
     switch (riskLevel) {
       case 'Low': return 'bg-green-100 text-green-800'
@@ -306,10 +351,29 @@ const Students = () => {
       </div>
 
       <div className="card">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-gray-200 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between sm:justify-start sm:gap-3">
             <h3 className="text-lg font-medium text-gray-900">Student List</h3>
             <span className="text-sm text-gray-500">{students.length} students</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {selectedStudentIds.length > 0 && (
+              <span className="text-xs text-gray-600">
+                {selectedStudentIds.length} selected
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={selectedStudentIds.length === 0}
+              className={`text-xs px-3 py-1 rounded border ${
+                selectedStudentIds.length === 0
+                  ? 'border-gray-200 text-gray-300 cursor-not-allowed'
+                  : 'border-red-200 text-red-600 hover:bg-red-50'
+              }`}
+            >
+              Delete Selected
+            </button>
           </div>
         </div>
 
@@ -327,8 +391,19 @@ const Students = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+                  <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      onChange={toggleSelectAll}
+                      checked={
+                        students.length > 0 &&
+                        students.every((s) => selectedStudentIds.includes(s.id))
+                      }
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance</th>
@@ -340,6 +415,14 @@ const Students = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {students.map((student) => (
                   <tr key={student.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        checked={selectedStudentIds.includes(student.id)}
+                        onChange={() => toggleStudentSelection(student.id)}
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0">
@@ -423,6 +506,7 @@ const Students = () => {
           setSelectedStudent(null)
         }}
         student={selectedStudent}
+        onEdit={handleEditStudent}
       />
 
       <BulkUploadModal

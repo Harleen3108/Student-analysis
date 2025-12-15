@@ -110,6 +110,10 @@ export const reportsAPI = {
     responseType: 'blob'
   }),
   getHistory: () => api.get('/reports/history'),
+  schedule: (type, options) => api.post('/reports/schedule', {
+    reportType: type,
+    reportOptions: options,
+  }),
 }
 
 // Notifications API

@@ -9,6 +9,19 @@ import toast from 'react-hot-toast'
 const Interventions = () => {
   const [activeTab, setActiveTab] = useState('active')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [selectedIntervention, setSelectedIntervention] = useState(null)
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editIntervention, setEditIntervention] = useState(null)
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    type: '',
+    priority: '',
+    startDate: '',
+    endDate: '',
+    assignedTo: '',
+  })
 
   // Fetch interventions from API
   const { data: interventionsData, isLoading, error, refetch } = useQuery(
@@ -20,6 +33,8 @@ const Interventions = () => {
   )
 
   const allInterventions = interventionsData?.data?.data?.interventions || interventionsData?.data?.interventions || []
+  const activeCount = allInterventions.filter(i => ['In Progress', 'Scheduled'].includes(i.status)).length
+  const completedCount = allInterventions.filter(i => i.status === 'Completed').length
   
   // Filter interventions based on active tab
   const interventions = allInterventions.filter(intervention => {
@@ -48,21 +63,8 @@ const Interventions = () => {
       const response = await interventionsAPI.getById(intervention.id)
       if (response.data.success) {
         const details = response.data.data
-        // Show detailed information in a more comprehensive way
-        const detailsMessage = `
-Intervention: ${details.title}
-Student: ${details.student}
-Type: ${details.type}
-Priority: ${details.priority}
-Status: ${details.status}
-Progress: ${details.progress}%
-Start Date: ${details.startDate}
-End Date: ${details.endDate}
-Assigned To: ${details.assignedTo}
-Description: ${details.description}
-        `
-        alert(detailsMessage) // For now, use alert. In production, use a proper modal
-        toast.success(`Loaded details for: ${intervention.title}`)
+        setSelectedIntervention(details)
+        setIsDetailsModalOpen(true)
       }
     } catch (error) {
       toast.error('Failed to load intervention details')
@@ -71,23 +73,85 @@ Description: ${details.description}
   }
 
   const handleEditIntervention = async (intervention) => {
+    // Open edit modal with current values (do not change status/progress here)
+    setEditIntervention(intervention)
+    setEditForm({
+      title: intervention.title || '',
+      description: intervention.description || '',
+      type: intervention.type || '',
+      priority: intervention.priority || '',
+      startDate: (intervention.startDate || '').toString().slice(0, 10),
+      endDate: (intervention.endDate || '').toString().slice(0, 10),
+      assignedTo: intervention.assignedTo || '',
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleMarkCompleted = async (intervention) => {
     try {
-      // Simple edit - update status to next logical state
-      let newStatus = intervention.status
-      if (intervention.status === 'Scheduled') newStatus = 'In Progress'
-      else if (intervention.status === 'In Progress') newStatus = 'Completed'
-      else if (intervention.status === 'Completed') newStatus = 'In Progress'
-      
+      if (intervention.status === 'Completed') {
+        toast('This intervention is already marked as completed.')
+        return
+      }
+
+      const confirmComplete = window.confirm(
+        'Mark this intervention as completed? Progress will be set to 100%.'
+      )
+      if (!confirmComplete) return
+
       const updatedData = {
         ...intervention,
-        status: newStatus,
-        progress: newStatus === 'Completed' ? 100 : intervention.progress + 25
+        status: 'Completed',
+        progress: 100,
       }
-      
+
       const response = await interventionsAPI.update(intervention.id, updatedData)
       if (response.data.success) {
-        toast.success(`Updated ${intervention.title} status to: ${newStatus}`)
-        refetch() // Refresh the interventions list
+        toast.success(`Marked ${intervention.title} as completed`)
+        refetch()
+      }
+    } catch (error) {
+      toast.error('Failed to mark intervention as completed')
+      console.error('Mark completed error:', error)
+    }
+  }
+
+  const handleEditFormChange = (e) => {
+    const { name, value } = e.target
+    setEditForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
+
+  const handleEditFormSubmit = async (e) => {
+    e.preventDefault()
+    if (!editIntervention) return
+
+    try {
+      const updatedData = {
+        ...editIntervention,
+        title: editForm.title.trim() || editIntervention.title,
+        description: editForm.description.trim(),
+        type: editForm.type || editIntervention.type,
+        priority: editForm.priority || editIntervention.priority,
+        startDate: editForm.startDate || editIntervention.startDate,
+        endDate: editForm.endDate || editIntervention.endDate,
+        assignedTo: editForm.assignedTo || editIntervention.assignedTo,
+        // IMPORTANT: keep existing status/progress untouched here
+        status: editIntervention.status,
+        progress:
+          typeof editIntervention.progress === 'number'
+            ? editIntervention.progress
+            : 0,
+      }
+
+      const response = await interventionsAPI.update(editIntervention.id, updatedData)
+      if (response.data.success) {
+        toast.success(`Updated ${editIntervention.title}`)
+        setIsEditModalOpen(false)
+        setEditIntervention(null)
+        refetch()
       }
     } catch (error) {
       toast.error('Failed to update intervention')
@@ -200,7 +264,7 @@ Description: ${details.description}
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Active Interventions ({activeTab === 'active' ? interventions.length : 0})
+              Active Interventions ({activeCount})
             </button>
             <button
               onClick={() => setActiveTab('completed')}
@@ -210,7 +274,7 @@ Description: ${details.description}
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Completed ({activeTab === 'completed' ? interventions.length : 0})
+              Completed ({completedCount})
             </button>
           </nav>
         </div>
@@ -291,6 +355,14 @@ Description: ${details.description}
                         >
                           Edit
                         </button>
+                        {intervention.status !== 'Completed' && (
+                          <button 
+                            onClick={() => handleMarkCompleted(intervention)}
+                            className="text-green-600 hover:text-green-800 text-sm font-medium"
+                          >
+                            Mark Completed
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -333,6 +405,251 @@ Description: ${details.description}
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateIntervention}
       />
+
+      {/* Edit Intervention Modal */}
+      {isEditModalOpen && editIntervention && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Edit Intervention
+              </h3>
+              <button
+                onClick={() => {
+                  setIsEditModalOpen(false)
+                  setEditIntervention(null)
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleEditFormSubmit} className="space-y-4 text-sm text-gray-700">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Title
+                </label>
+                <input
+                  name="title"
+                  value={editForm.title}
+                  onChange={handleEditFormChange}
+                  className="input"
+                  placeholder="Intervention title"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  value={editForm.description}
+                  onChange={handleEditFormChange}
+                  className="input"
+                  rows={3}
+                  placeholder="Describe the intervention plan and objectives"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Type
+                  </label>
+                  <select
+                    name="type"
+                    value={editForm.type}
+                    onChange={handleEditFormChange}
+                    className="input"
+                  >
+                    <option value="">Select type</option>
+                    <option value="Academic Support">Academic Support</option>
+                    <option value="Counseling">Counseling</option>
+                    <option value="Parent Meeting">Parent Meeting</option>
+                    <option value="Financial Aid">Financial Aid</option>
+                    <option value="Remedial Classes">Remedial Classes</option>
+                    <option value="Home Visit">Home Visit</option>
+                    <option value="Behavioral Support">Behavioral Support</option>
+                    <option value="Health Support">Health Support</option>
+                    <option value="Mentoring">Mentoring</option>
+                    <option value="Peer Support">Peer Support</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    name="priority"
+                    value={editForm.priority}
+                    onChange={handleEditFormChange}
+                    className="input"
+                  >
+                    <option value="">Select priority</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    name="startDate"
+                    value={editForm.startDate}
+                    onChange={handleEditFormChange}
+                    className="input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    name="endDate"
+                    value={editForm.endDate}
+                    onChange={handleEditFormChange}
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Assigned To
+                </label>
+                <input
+                  name="assignedTo"
+                  value={editForm.assignedTo}
+                  onChange={handleEditFormChange}
+                  className="input"
+                  placeholder="Counselor / teacher responsible"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false)
+                    setEditIntervention(null)
+                  }}
+                  className="btn-outline"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Intervention Details Modal */}
+      {isDetailsModalOpen && selectedIntervention && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Intervention Details
+              </h3>
+              <button
+                onClick={() => {
+                  setIsDetailsModalOpen(false)
+                  setSelectedIntervention(null)
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm text-gray-700">
+              <div>
+                <p className="font-semibold text-gray-900">{selectedIntervention.title}</p>
+                <p className="mt-1 text-gray-600">{selectedIntervention.description}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500">Student</p>
+                  <p className="font-medium">
+                    {selectedIntervention.student || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Assigned To</p>
+                  <p className="font-medium">
+                    {selectedIntervention.assignedTo || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Type</p>
+                  <p className="font-medium">
+                    {selectedIntervention.type}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Priority</p>
+                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${getPriorityColor(selectedIntervention.priority)}`}>
+                    {selectedIntervention.priority}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Status</p>
+                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(selectedIntervention.status)}`}>
+                    {selectedIntervention.status}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Progress</p>
+                  <p className="font-medium">
+                    {typeof selectedIntervention.progress === 'number'
+                      ? `${selectedIntervention.progress}%`
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500">Start Date</p>
+                  <p className="font-medium">{selectedIntervention.startDate}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">End Date</p>
+                  <p className="font-medium">{selectedIntervention.endDate}</p>
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end">
+                <button
+                  onClick={() => {
+                    setIsDetailsModalOpen(false)
+                    setSelectedIntervention(null)
+                  }}
+                  className="btn-outline"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

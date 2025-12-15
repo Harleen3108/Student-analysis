@@ -1,11 +1,16 @@
 import React from 'react'
 import { useQuery } from 'react-query'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import { X, User, Phone, Mail, Calendar, MapPin, GraduationCap, AlertTriangle, FileText, Clock } from 'lucide-react'
-import { adminAPI } from '../../services/api'
+import { adminAPI, interventionsAPI } from '../../services/api'
 import LoadingSpinner from '../UI/LoadingSpinner'
 import Avatar from '../UI/Avatar'
+import toast from 'react-hot-toast'
 
-const StudentDetailsModal = ({ isOpen, onClose, student }) => {
+const StudentDetailsModal = ({ isOpen, onClose, student, onEdit }) => {
+  const navigate = useNavigate()
+  const { user } = useAuth() || {}
   // Fetch observations for this student
   const { data: observationsData, isLoading: observationsLoading } = useQuery(
     ['student-observations', student?.id],
@@ -166,13 +171,64 @@ const StudentDetailsModal = ({ isOpen, onClose, student }) => {
           <div className="bg-gray-50 rounded-lg p-4">
             <h5 className="font-semibold text-gray-900 mb-3">Quick Actions</h5>
             <div className="space-y-2">
-              <button className="w-full text-left px-3 py-2 text-sm bg-white rounded border hover:bg-gray-50 transition-colors">
+              <button 
+                onClick={() => {
+                  if (user?.role === 'teacher') {
+                    navigate(`/teacher/attendance`, { state: { studentId: student.id } })
+                  } else if (user?.role === 'parent') {
+                    navigate(`/parent/attendance`, { state: { studentId: student.id } })
+                  } else {
+                    // Admin - navigate to interventions or show toast
+                    navigate(`/interventions`, { state: { studentId: student.id } })
+                  }
+                  onClose()
+                  toast.success(`Viewing attendance for ${student.firstName} ${student.lastName}`)
+                }}
+                className="w-full text-left px-3 py-2 text-sm bg-white rounded border hover:bg-gray-50 transition-colors"
+              >
                 📊 View Attendance History
               </button>
-              <button className="w-full text-left px-3 py-2 text-sm bg-white rounded border hover:bg-gray-50 transition-colors">
+              <button 
+                onClick={() => {
+                  if (user?.role === 'teacher') {
+                    navigate(`/teacher/academic-entry`, { state: { studentId: student.id } })
+                  } else if (user?.role === 'parent') {
+                    navigate(`/parent/academic`, { state: { studentId: student.id } })
+                  } else {
+                    // Admin - show info
+                    toast.info('Academic records feature - Access via teacher/student pages')
+                  }
+                  onClose()
+                  toast.success(`Viewing academic records for ${student.firstName} ${student.lastName}`)
+                }}
+                className="w-full text-left px-3 py-2 text-sm bg-white rounded border hover:bg-gray-50 transition-colors"
+              >
                 📝 View Academic Records
               </button>
-              <button className="w-full text-left px-3 py-2 text-sm bg-white rounded border hover:bg-gray-50 transition-colors">
+              <button 
+                onClick={async () => {
+                  try {
+                    // Check if student already has interventions
+                    const interventions = await interventionsAPI.getByStudent(student.id)
+                    if (interventions?.data?.data?.interventions?.length > 0) {
+                      // Navigate to interventions page
+                      navigate(`/interventions`, { state: { studentId: student.id } })
+                      toast.info('Student already has interventions. Showing existing plans.')
+                    } else {
+                      // Navigate to create intervention page
+                      navigate(`/interventions`, { state: { studentId: student.id, create: true } })
+                      toast.success(`Creating intervention plan for ${student.firstName} ${student.lastName}`)
+                    }
+                    onClose()
+                  } catch (error) {
+                    // Fallback: navigate to interventions page anyway
+                    navigate(`/interventions`, { state: { studentId: student.id, create: true } })
+                    onClose()
+                    toast.success(`Creating intervention plan for ${student.firstName} ${student.lastName}`)
+                  }
+                }}
+                className="w-full text-left px-3 py-2 text-sm bg-white rounded border hover:bg-gray-50 transition-colors"
+              >
                 🎯 Create Intervention Plan
               </button>
             </div>
@@ -253,9 +309,17 @@ const StudentDetailsModal = ({ isOpen, onClose, student }) => {
           >
             Close
           </button>
-          <button className="btn-primary">
-            Edit Student
-          </button>
+          {onEdit && (
+            <button 
+              onClick={() => {
+                onEdit(student)
+                onClose()
+              }}
+              className="btn-primary"
+            >
+              Edit Student
+            </button>
+          )}
         </div>
       </div>
     </div>

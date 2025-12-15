@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Upload, User } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
+import Avatar from '../UI/Avatar'
 
 const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
   const [isLoading, setIsLoading] = useState(false)
+  const [imagePreview, setImagePreview] = useState(null)
+  const [imageFile, setImageFile] = useState(null)
   
   const {
     register,
@@ -17,27 +20,87 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
   // Populate form with student data when modal opens
   useEffect(() => {
     if (isOpen && student) {
-      setValue('firstName', student.firstName)
-      setValue('lastName', student.lastName)
-      setValue('rollNumber', student.rollNumber)
-      setValue('class', student.class)
-      setValue('section', student.class) // Using class as section for now
-      setValue('email', student.email)
-      setValue('phone', student.phone)
-      setValue('attendance', student.attendance)
-      setValue('academicScore', student.academicScore)
+      setValue('firstName', student.firstName || '')
+      setValue('lastName', student.lastName || '')
+      setValue('rollNumber', student.rollNumber || '')
+      setValue('class', student.class || '')
+      setValue('email', student.email || '')
+      setValue('phone', student.phone || '')
+      setValue('attendance', student.attendance || 100)
+      setValue('academicScore', student.academicScore || 0)
+      
+      // Set image preview if student has a photo (but don't set imageFile - that's only for new uploads)
+      if (student.photo) {
+        const photoUrl = typeof student.photo === 'object' && student.photo?.url ? student.photo.url : student.photo
+        setImagePreview(photoUrl)
+      } else {
+        setImagePreview(null)
+      }
+      setImageFile(null) // Reset to null so we know if a new file was selected
     }
   }, [isOpen, student, setValue])
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size should be less than 5MB')
+        return
+      }
+
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select a valid image file')
+        return
+      }
+
+      setImageFile(file)
+      
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
   const handleFormSubmit = async (data) => {
     setIsLoading(true)
     try {
-      await onSubmit(student.id, data)
+      console.log('📝 Edit form data:', data)
+      console.log('📝 Image file:', imageFile)
+      console.log('📝 Image preview exists:', !!imagePreview)
+      
+      // Prepare update data
+      const updateData = {
+        firstName: data.firstName?.trim(),
+        lastName: data.lastName?.trim(),
+        rollNumber: data.rollNumber?.trim(),
+        class: data.class,
+        email: data.email?.trim() || undefined,
+        phone: data.phone?.trim() || undefined,
+        attendance: data.attendance ? Number(data.attendance) : undefined,
+        academicScore: data.academicScore ? Number(data.academicScore) : undefined,
+      }
+      
+      // Only send photo if a new image file was uploaded
+      if (imageFile && imagePreview) {
+        updateData.photo = imagePreview
+        console.log('📝 Including new photo in update')
+      }
+      
+      console.log('📝 Final update data:', { ...updateData, photo: updateData.photo ? '[BASE64 IMAGE]' : 'NOT INCLUDED' })
+      
+      await onSubmit(student.id, updateData)
       toast.success('Student updated successfully!')
       reset()
+      setImagePreview(null)
+      setImageFile(null)
       onClose()
     } catch (error) {
-      toast.error('Failed to update student')
+      console.error('❌ Update error:', error)
+      console.error('❌ Error response:', error.response?.data)
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to update student'
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -64,6 +127,62 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
         </div>
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+          {/* Profile Photo */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Profile Photo
+            </label>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-24 h-24 rounded-full object-cover border-2 border-gray-300"
+                  />
+                ) : (
+                  <Avatar
+                    src={student.photo}
+                    firstName={student.firstName}
+                    lastName={student.lastName}
+                    size="2xl"
+                  />
+                )}
+              </div>
+              <div>
+                <label className="btn-outline cursor-pointer flex items-center gap-2 inline-flex">
+                  <Upload className="w-4 h-4" />
+                  {imageFile ? 'Change Photo' : 'Upload Photo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </label>
+                {imageFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageFile(null)
+                      // Restore original photo preview
+                      if (student.photo) {
+                        const photoUrl = typeof student.photo === 'object' && student.photo?.url ? student.photo.url : student.photo
+                        setImagePreview(photoUrl)
+                      } else {
+                        setImagePreview(null)
+                      }
+                    }}
+                    className="block text-xs text-red-600 hover:text-red-800 mt-1"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <p className="text-xs text-gray-500 mt-1">Max 5MB. JPG, PNG accepted.</p>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -108,45 +227,25 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Class
-              </label>
-              <select
-                {...register('class', { required: 'Class is required' })}
-                className="input"
-              >
-                <option value="">Select class</option>
-                <option value="9A">Class 9A</option>
-                <option value="9B">Class 9B</option>
-                <option value="10A">Class 10A</option>
-                <option value="10B">Class 10B</option>
-                <option value="11A">Class 11A</option>
-                <option value="11B">Class 11B</option>
-              </select>
-              {errors.class && (
-                <p className="text-red-600 text-sm mt-1">{errors.class.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Section
-              </label>
-              <select
-                {...register('section', { required: 'Section is required' })}
-                className="input"
-              >
-                <option value="">Select section</option>
-                <option value="A">Section A</option>
-                <option value="B">Section B</option>
-                <option value="C">Section C</option>
-              </select>
-              {errors.section && (
-                <p className="text-red-600 text-sm mt-1">{errors.section.message}</p>
-              )}
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Class
+            </label>
+            <select
+              {...register('class', { required: 'Class is required' })}
+              className="input"
+            >
+              <option value="">Select class</option>
+              <option value="9A">Class 9A</option>
+              <option value="9B">Class 9B</option>
+              <option value="10A">Class 10A</option>
+              <option value="10B">Class 10B</option>
+              <option value="11A">Class 11A</option>
+              <option value="11B">Class 11B</option>
+            </select>
+            {errors.class && (
+              <p className="text-red-600 text-sm mt-1">{errors.class.message}</p>
+            )}
           </div>
 
           <div>
@@ -155,7 +254,6 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
             </label>
             <input
               {...register('email', { 
-                required: 'Email is required',
                 pattern: {
                   value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                   message: 'Invalid email address'
@@ -163,7 +261,7 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
               })}
               type="email"
               className="input"
-              placeholder="Enter email address"
+              placeholder="Enter email address (optional)"
             />
             {errors.email && (
               <p className="text-red-600 text-sm mt-1">{errors.email.message}</p>
@@ -176,14 +274,13 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
             </label>
             <input
               {...register('phone', { 
-                required: 'Phone is required',
                 pattern: {
                   value: /^[0-9]{10}$/,
                   message: 'Phone must be 10 digits'
                 }
               })}
               className="input"
-              placeholder="Enter phone number"
+              placeholder="Enter phone number (optional)"
             />
             {errors.phone && (
               <p className="text-red-600 text-sm mt-1">{errors.phone.message}</p>

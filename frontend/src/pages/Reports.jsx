@@ -1,11 +1,17 @@
 import React, { useState } from 'react'
-import { Download, FileText, Calendar, Filter, BarChart3 } from 'lucide-react'
+import { Download, FileText, Calendar, BarChart3 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { reportsAPI } from '../services/api'
 
 const Reports = () => {
   const [selectedReportType, setSelectedReportType] = useState('risk-analysis')
   const [dateRange, setDateRange] = useState('last-30-days')
   const [classFilter, setClassFilter] = useState('all')
+  const [format, setFormat] = useState('pdf')
+  const [includePhotos, setIncludePhotos] = useState(false)
+  const [includeParentContact, setIncludeParentContact] = useState(false)
+  const [includeRiskFactorAnalysis, setIncludeRiskFactorAnalysis] = useState(true)
+  const [includeInterventionHistory, setIncludeInterventionHistory] = useState(false)
 
   const reportTypes = [
     {
@@ -75,41 +81,75 @@ const Reports = () => {
 
   const handleGenerateReport = async () => {
     try {
-      const reportConfig = {
-        type: selectedReportType,
+      const reportName = reportTypes.find(r => r.id === selectedReportType)?.name || 'Report'
+
+      const payload = {
         dateRange,
         classFilter,
-        format: 'pdf', // Could be made configurable
-        timestamp: new Date().toISOString()
+        format,
+        options: {
+          includePhotos,
+          includeParentContact,
+          includeRiskFactorAnalysis,
+          includeInterventionHistory,
+        },
       }
-      
-      console.log('Generating report with config:', reportConfig)
-      
-      // Simulate API call delay
-      toast.loading('Generating report...')
-      
-      setTimeout(() => {
-        const reportName = reportTypes.find(r => r.id === selectedReportType)?.name || 'Report'
-        
-        // Simulate file download
-        const blob = new Blob(['Sample report content'], { type: 'application/pdf' })
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${reportName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        window.URL.revokeObjectURL(url)
-        
-        toast.dismiss()
-        toast.success(`${reportName} generated and downloaded successfully!`)
-      }, 2000)
-      
+
+      const loadingId = toast.loading(`Generating ${reportName}...`)
+
+      // Call backend reports API – this returns a Blob
+      const response = await reportsAPI.generate(selectedReportType, payload)
+      const blob = new Blob([response.data], {
+        type:
+          format === 'excel'
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'application/pdf',
+      })
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${reportName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${
+        format === 'excel' ? 'xlsx' : 'pdf'
+      }`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      toast.dismiss(loadingId)
+      toast.success(`${reportName} generated and downloaded successfully!`)
     } catch (error) {
       toast.dismiss()
       toast.error('Failed to generate report')
       console.error('Report generation error:', error)
+    }
+  }
+
+  const handleScheduleReport = async () => {
+    try {
+      const reportName = reportTypes.find(r => r.id === selectedReportType)?.name || 'Report'
+
+      const options = {
+        dateRange,
+        classFilter,
+        format,
+        options: {
+          includePhotos,
+          includeParentContact,
+          includeRiskFactorAnalysis,
+          includeInterventionHistory,
+        },
+      }
+
+      const loadingId = toast.loading(`Scheduling ${reportName}...`)
+      await reportsAPI.schedule(selectedReportType, options)
+      toast.dismiss(loadingId)
+      toast.success(`${reportName} scheduled successfully!`)
+    } catch (error) {
+      toast.dismiss()
+      toast.error('Failed to schedule report')
+      console.error('Schedule report error:', error)
     }
   }
 
@@ -198,10 +238,13 @@ const Reports = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Format
                 </label>
-                <select className="input">
+                <select
+                  value={format}
+                  onChange={(e) => setFormat(e.target.value)}
+                  className="input"
+                >
                   <option value="pdf">PDF</option>
                   <option value="excel">Excel</option>
-                  <option value="csv">CSV</option>
                 </select>
               </div>
             </div>
@@ -211,19 +254,39 @@ const Reports = () => {
               <h4 className="font-medium text-gray-900">Additional Options</h4>
               <div className="space-y-2">
                 <label className="flex items-center">
-                  <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                  <input
+                    type="checkbox"
+                    checked={includePhotos}
+                    onChange={(e) => setIncludePhotos(e.target.checked)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
                   <span className="ml-2 text-sm text-gray-700">Include student photos</span>
                 </label>
                 <label className="flex items-center">
-                  <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                  <input
+                    type="checkbox"
+                    checked={includeParentContact}
+                    onChange={(e) => setIncludeParentContact(e.target.checked)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
                   <span className="ml-2 text-sm text-gray-700">Include parent contact information</span>
                 </label>
                 <label className="flex items-center">
-                  <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" defaultChecked />
+                  <input
+                    type="checkbox"
+                    checked={includeRiskFactorAnalysis}
+                    onChange={(e) => setIncludeRiskFactorAnalysis(e.target.checked)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
                   <span className="ml-2 text-sm text-gray-700">Include risk factor analysis</span>
                 </label>
                 <label className="flex items-center">
-                  <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                  <input
+                    type="checkbox"
+                    checked={includeInterventionHistory}
+                    onChange={(e) => setIncludeInterventionHistory(e.target.checked)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
                   <span className="ml-2 text-sm text-gray-700">Include intervention history</span>
                 </label>
               </div>
@@ -239,10 +302,7 @@ const Reports = () => {
                 Generate Report
               </button>
               <button 
-                onClick={() => {
-                  const scheduleDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-                  toast.success(`Report scheduled for ${scheduleDate}`)
-                }}
+                onClick={handleScheduleReport}
                 className="btn-outline flex items-center gap-2"
               >
                 <Calendar className="w-4 h-4" />

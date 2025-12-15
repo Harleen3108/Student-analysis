@@ -80,17 +80,18 @@ const BulkUploadModal = ({ isOpen, onClose, onSubmit }) => {
   }
 
   const downloadTemplate = () => {
-    // Create a sample CSV template
-    const csvContent = `firstName,lastName,rollNumber,class,section,email,phone,dateOfBirth,gender
-John,Doe,ST001,10A,A,john.doe@school.com,9876543210,2008-01-15,Male
-Jane,Smith,ST002,10A,A,jane.smith@school.com,9876543211,2008-02-20,Female
-Mike,Johnson,ST003,10B,B,mike.johnson@school.com,9876543212,2008-03-10,Male`
+    // Simple CSV template that matches the bulk upload expectations:
+    // name, class, attendance, risk (optional), academicScore (optional)
+    const csvContent = `name,class,attendance,risk,academicScore
+John Doe,10A,92,Low,85
+Jane Smith,10B,68,High,45
+Rahul Kumar,9A,75,Medium,60`
 
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'student_upload_template.csv'
+    a.download = 'student_bulk_upload_template.csv'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
