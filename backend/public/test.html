@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dropout System - Real-time Test</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .header {
+            text-align: center;
+            color: #3B82F6;
+            margin-bottom: 30px;
+        }
+        .status {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .status-item {
+            padding: 10px 15px;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+        }
+        .connected { background-color: #10B981; }
+        .disconnected { background-color: #EF4444; }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3B82F6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2563EB;
+        }
+        .students-list {
+            margin-top: 20px;
+        }
+        .student-card {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #3B82F6;
+        }
+        .risk-high { border-left-color: #EF4444; }
+        .risk-medium { border-left-color: #F59E0B; }
+        .risk-low { border-left-color: #10B981; }
+        .logs {
+            background: #1f2937;
+            color: #10B981;
+            padding: 15px;
+            border-radius: 5px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎓 Student Dropout Prevention System</h1>
+        <p>Real-time Dynamic Testing Interface</p>
+    </div>
+
+    <div class="container">
+        <div class="status">
+            <div id="connectionStatus" class="status-item disconnected">
+                🔴 Disconnected
+            </div>
+            <div id="studentCount" class="status-item" style="background-color: #6366F1;">
+                👥 Students: Loading...
+            </div>
+            <div id="riskCount" class="status-item" style="background-color: #EF4444;">
+                ⚠️ High Risk: Loading...
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Add New Student (Real-time)</h2>
+        <form id="studentForm">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label for="firstName">First Name:</label>
+                    <input type="text" id="firstName" required>
+                </div>
+                <div class="form-group">
+                    <label for="lastName">Last Name:</label>
+                    <input type="text" id="lastName" required>
+                </div>
+                <div class="form-group">
+                    <label for="rollNumber">Roll Number:</label>
+                    <input type="text" id="rollNumber" required>
+                </div>
+                <div class="form-group">
+                    <label for="section">Class/Section:</label>
+                    <select id="section" required>
+                        <option value="">Select Class</option>
+                        <option value="9A">Class 9A</option>
+                        <option value="9B">Class 9B</option>
+                        <option value="10A">Class 10A</option>
+                        <option value="10B">Class 10B</option>
+                        <option value="11A">Class 11A</option>
+                        <option value="11B">Class 11B</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone:</label>
+                    <input type="tel" id="phone" required>
+                </div>
+            </div>
+            <button type="submit">➕ Add Student (Real-time)</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <h2>Students List (Live Updates)</h2>
+        <div id="studentsList" class="students-list">
+            Loading students...
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Real-time Activity Log</h2>
+        <div id="logs" class="logs">
+            Connecting to real-time server...
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.io connection
+        const socket = io('http://localhost:5000');
+        let students = [];
+
+        // DOM elements
+        const connectionStatus = document.getElementById('connectionStatus');
+        const studentCount = document.getElementById('studentCount');
+        const riskCount = document.getElementById('riskCount');
+        const studentsList = document.getElementById('studentsList');
+        const logs = document.getElementById('logs');
+        const studentForm = document.getElementById('studentForm');
+
+        // Logging function
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.innerHTML += `[${timestamp}] ${message}\n`;
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        // Socket connection events
+        socket.on('connect', () => {
+            connectionStatus.textContent = '🟢 Connected';
+            connectionStatus.className = 'status-item connected';
+            log('✅ Connected to real-time server');
+            loadStudents();
+        });
+
+        socket.on('disconnect', () => {
+            connectionStatus.textContent = '🔴 Disconnected';
+            connectionStatus.className = 'status-item disconnected';
+            log('❌ Disconnected from server');
+        });
+
+        // Real-time student events
+        socket.on('student:created', (data) => {
+            log(`🎉 New student added: ${data.firstName} ${data.lastName} (${data.rollNumber})`);
+            loadStudents(); // Refresh the list
+        });
+
+        socket.on('student:updated', (data) => {
+            log(`📝 Student updated: ${data.firstName} ${data.lastName}`);
+            loadStudents();
+        });
+
+        socket.on('student:deleted', (data) => {
+            log(`🗑️ Student removed: ${data.name}`);
+            loadStudents();
+        });
+
+        // Load students from API
+        async function loadStudents() {
+            try {
+                const response = await fetch('http://localhost:5000/api/v1/students');
+                const data = await response.json();
+                
+                if (data.success) {
+                    students = data.data.students;
+                    updateStudentsList();
+                    updateStats();
+                    log(`📊 Loaded ${students.length} students from database`);
+                }
+            } catch (error) {
+                log(`❌ Error loading students: ${error.message}`);
+            }
+        }
+
+        // Update students list display
+        function updateStudentsList() {
+            if (students.length === 0) {
+                studentsList.innerHTML = '<p>No students found. Add some students to see them here!</p>';
+                return;
+            }
+
+            studentsList.innerHTML = students.map(student => `
+                <div class="student-card risk-${student.riskLevel.toLowerCase()}">
+                    <strong>${student.firstName} ${student.lastName}</strong> 
+                    <span style="color: #666;">(${student.rollNumber})</span>
+                    <br>
+                    <small>
+                        Class: ${student.class} | 
+                        Attendance: ${student.attendance}% | 
+                        Academic: ${student.academicScore}% | 
+                        Risk: <span style="font-weight: bold; color: ${getRiskColor(student.riskLevel)}">${student.riskLevel}</span>
+                    </small>
+                </div>
+            `).join('');
+        }
+
+        // Update statistics
+        function updateStats() {
+            const totalStudents = students.length;
+            const highRiskStudents = students.filter(s => s.riskLevel === 'High' || s.riskLevel === 'Critical').length;
+            
+            studentCount.textContent = `👥 Students: ${totalStudents}`;
+            riskCount.textContent = `⚠️ High Risk: ${highRiskStudents}`;
+        }
+
+        // Get risk level color
+        function getRiskColor(riskLevel) {
+            switch(riskLevel) {
+                case 'Low': return '#10B981';
+                case 'Medium': return '#F59E0B';
+                case 'High': return '#EF4444';
+                case 'Critical': return '#7C3AED';
+                default: return '#6B7280';
+            }
+        }
+
+        // Handle form submission
+        studentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                rollNumber: document.getElementById('rollNumber').value,
+                section: document.getElementById('section').value,
+                email: document.getElementById('email').value,
+                phone: document.getElementById('phone').value
+            };
+
+            try {
+                log(`📤 Adding student: ${formData.firstName} ${formData.lastName}...`);
+                
+                const response = await fetch('http://localhost:5000/api/v1/students', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    log(`✅ Student added successfully: ${result.data.firstName} ${result.data.lastName}`);
+                    studentForm.reset();
+                    // The real-time update will be handled by the socket event
+                } else {
+                    log(`❌ Failed to add student: ${result.message}`);
+                }
+            } catch (error) {
+                log(`❌ Error adding student: ${error.message}`);
+            }
+        });
+
+        // Initial load
+        log('🚀 Application started');
+        log('🔌 Connecting to Socket.io server...');
+    </script>
+</body>
+</html>

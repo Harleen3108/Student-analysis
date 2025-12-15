@@ -1,0 +1,34 @@
+{"level":"info","message":"✅ Connected to MongoDB","service":"student-dropout-api","timestamp":"2025-12-14 16:26:25:643"}
+{"level":"info","message":"📊 Found 23 active students","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:212"}
+{"level":"info","message":"ℹ️ Student ST001 already linked to parent robert.doe@email.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:283"}
+{"level":"info","message":"ℹ️ Student ST002 already linked to parent james.smith@email.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:357"}
+{"level":"info","message":"ℹ️ Student ST003 already linked to parent michael.johnson@email.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:411"}
+{"level":"warn","message":"⚠️ Student 13 has no parent email","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:412"}
+{"level":"warn","message":"⚠️ Student TS999 has no parent email","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:413"}
+{"level":"info","message":"ℹ️ Student BU001 already linked to parent bulk1@school.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:475"}
+{"level":"info","message":"ℹ️ Student BU002 already linked to parent bulk2@school.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:545"}
+{"level":"info","message":"ℹ️ Student BU003 already linked to parent bulk3@school.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:606"}
+{"level":"warn","message":"⚠️ Student ST11A001 has no parent email","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:607"}
+{"level":"warn","message":"⚠️ Student ST11A002 has no parent email","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:607"}
+{"level":"warn","message":"⚠️ Student ST11B001 has no parent email","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:608"}
+{"level":"warn","message":"⚠️ Student ST11B002 has no parent email","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:608"}
+{"level":"info","message":"ℹ️ Student ST10A001 already linked to parent johnson@email.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:675"}
+{"level":"info","message":"ℹ️ Student ST10A002 already linked to parent smith@email.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:767"}
+{"level":"info","message":"ℹ️ Student ST10A003 already linked to parent brown@email.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:836"}
+{"level":"info","message":"ℹ️ Student ST10B001 already linked to parent wilson@email.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:901"}
+{"level":"info","message":"ℹ️ Student ST10B002 already linked to parent davis@email.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:26:960"}
+{"level":"info","message":"ℹ️ Student TEST1765695523073 already linked to parent father@test.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:020"}
+{"level":"info","message":"ℹ️ Student TEST1765695705066 already linked to parent father@test.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:089"}
+{"level":"info","message":"ℹ️ Student TEST1765695832619 already linked to parent father@test.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:161"}
+{"level":"info","message":"ℹ️ Student TEST1765695930931 already linked to parent father@test.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:221"}
+{"level":"info","message":"ℹ️ Student TEST1765695952711 already linked to parent father@test.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:280"}
+{"level":"info","message":"ℹ️ Student 31 already linked to parent yaksha742@gmail.com","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:344"}
+{"level":"info","message":"\n📊 Summary:","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:345"}
+{"level":"info","message":"✅ Students linked to existing parents: 0","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:345"}
+{"level":"info","message":"✅ New parent accounts created: 0","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:346"}
+{"level":"info","message":"❌ Errors: 0","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:346"}
+{"level":"info","message":"📝 Total students processed: 23","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:347"}
+{"level":"info","message":"\n👨‍👩‍👧‍👦 Total parents with children: 13","service":"student-dropout-api","timestamp":"2025-12-14 16:26:27:421"}
+{"level":"info","message":"✅ Connected to MongoDB","service":"student-dropout-api","timestamp":"2025-12-14 16:26:52:393"}
+{"level":"info","message":"✅ Connected to MongoDB","service":"student-dropout-api","timestamp":"2025-12-14 16:27:48:915"}
+{"level":"info","message":"\n✅ Database connection closed","service":"student-dropout-api","timestamp":"2025-12-14 16:27:51:816"}
