@@ -9,7 +9,7 @@ import { useSocket } from '../contexts/SocketContext'
 
 const RiskAnalysis = () => {
   const [searchTerm, setSearchTerm] = useState('')
-  const [riskFilter, setRiskFilter] = useState('High Risk')
+  const [riskFilter, setRiskFilter] = useState('All')
   const [classFilter, setClassFilter] = useState('All Classes')
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [showAddNoteModal, setShowAddNoteModal] = useState(false)
@@ -44,9 +44,9 @@ const RiskAnalysis = () => {
   
   console.log('All students data:', allStudents) // Debug log
   
-  // Use backend risk data directly and filter at-risk students
+  // Use backend risk data directly - show ALL students with risk data
   let atRiskStudents = allStudents
-    .filter(student => ['High', 'Critical', 'Medium'].includes(student.riskLevel)) // Filter by backend risk level
+    .filter(student => student.riskLevel && student.riskScore !== undefined) // Show all students with risk data
     .map(student => {
       const attendance = student.attendance || student.attendancePercentage || 100
       const academic = student.academicScore || student.overallPercentage || 0
@@ -69,9 +69,7 @@ const RiskAnalysis = () => {
       }
     })
   
-  // If no at-risk students found, show message but don't create fake data
   console.log('At-risk students found:', atRiskStudents.length)
-  
   console.log('At-risk students:', atRiskStudents) // Debug log
   
   // Apply filters

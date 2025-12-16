@@ -102,10 +102,13 @@ export const getStudentById = asyncHandler(async (req, res, next) => {
     0, // Placeholder
   ]);
 
+  // Ensure risk data is consistent - use stored values from database
+  const studentData = student.toObject();
+  
   res.status(200).json({
     status: "success",
     data: {
-      student,
+      student: studentData,
       attendanceSummary,
       grades,
       interventionCount,
@@ -271,6 +274,20 @@ export const getStudentRiskAnalysis = asyncHandler(async (req, res, next) => {
   // Recalculate risk score
   const riskData = await calculateRiskScore(student._id);
 
+  // Determine risk level based on score
+  let riskLevel = 'Low';
+  if (riskData.totalRiskScore >= 70) {
+    riskLevel = 'High';
+  } else if (riskData.totalRiskScore >= 40) {
+    riskLevel = 'Medium';
+  }
+
+  // Update student with new risk data
+  student.riskScore = riskData.totalRiskScore;
+  student.riskLevel = riskLevel;
+  student.riskFactors = riskData.factors;
+  await student.save();
+
   // Get historical risk data (implement based on your needs)
   const riskHistory = []; // Placeholder
 
@@ -279,12 +296,13 @@ export const getStudentRiskAnalysis = asyncHandler(async (req, res, next) => {
     data: {
       currentRisk: {
         score: riskData.totalRiskScore,
-        level: student.riskLevel,
+        level: riskLevel,
         factors: riskData.factors,
       },
       breakdown: riskData.breakdown,
       history: riskHistory,
       recommendations: riskData.recommendations || [],
+      dropoutPrediction: riskData.dropoutPrediction || null,
     },
   });
 });
