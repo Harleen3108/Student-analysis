@@ -1,12 +1,14 @@
 import React, { useState } from 'react'
 import { useQuery } from 'react-query'
-import { Bell, Search, Settings, LogOut, X } from 'lucide-react'
+import { Bell, Search, Settings, LogOut, X, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import { notificationsAPI } from '../../services/api'
 import toast from 'react-hot-toast'
 
 const Header = () => {
   const { user, logout } = useAuth()
+  const { isDark, toggleTheme } = useTheme()
   const [searchTerm, setSearchTerm] = useState('')
   const [showNotifications, setShowNotifications] = useState(false)
 
@@ -107,8 +109,12 @@ const Header = () => {
     toast.success('Settings panel opened')
   }
 
+  const headerClasses = isDark
+    ? 'bg-gray-900 border-b border-gray-700 px-6 py-4'
+    : 'bg-white border-b border-gray-200 px-6 py-4'
+
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
+    <header className={headerClasses}>
       <div className="flex items-center justify-between">
         {/* Search */}
         <div className="flex-1 max-w-lg">
@@ -219,6 +225,18 @@ const Header = () => {
               </div>
             )}
           </div>
+
+          {/* Theme toggle */}
+          <button
+            onClick={() => {
+              toggleTheme()
+              toast.success(isDark ? 'Switched to light mode' : 'Switched to dark mode')
+            }}
+            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
 
           {/* Settings */}
           <button 

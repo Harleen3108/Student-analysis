@@ -3,7 +3,15 @@ import logger from "../utils/logger.js";
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+    const uri = process.env.MONGODB_URI;
+
+    if (!uri) {
+      logger.error("❌ MongoDB connection failed: MONGODB_URI is not set");
+      logger.warn("⚠️ Please add MONGODB_URI to your environment (.env)");
+      return null;
+    }
+
+    const conn = await mongoose.connect(uri, {
       // No need for useNewUrlParser and useUnifiedTopology in mongoose 6+
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,

@@ -13,21 +13,28 @@ const Login = () => {
   const navigate = useNavigate()
 
   useEffect(() => {
+    console.log('Login useEffect - user:', user)
     if (user) {
+      console.log('User detected, navigating based on role:', user.role)
       switch (user.role) {
         case "admin":
-          navigate("/admin", { replace: true })
+          console.log('Navigating to admin dashboard (/)')
+          navigate("/", { replace: true })
           break
         case "teacher":
+          console.log('Navigating to teacher dashboard')
           navigate("/teacher", { replace: true })
           break
         case "parent":
+          console.log('Navigating to parent dashboard')
           navigate("/parent", { replace: true })
           break
         case "counselor":
+          console.log('Navigating to counselor dashboard')
           navigate("/counselor", { replace: true })
           break
         default:
+          console.log('Navigating to default route (/)')
           navigate("/", { replace: true })
       }
     }
@@ -42,7 +49,15 @@ const Login = () => {
   const onSubmit = async (data) => {
     setIsLoading(true)
     try {
-      await login(data)
+      const result = await login(data)
+      console.log('Login result:', result)
+      
+      if (result && result.success) {
+        // Login successful, navigation will happen via useEffect
+        console.log('Login successful, waiting for redirect...')
+      } else {
+        console.log('Login failed:', result?.error)
+      }
     } catch (err) {
       console.error("Login failed", err)
     } finally {

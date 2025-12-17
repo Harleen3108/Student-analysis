@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Login</title>
+</head>
+<body>
+    <h1>Test Login</h1>
+    <button onclick="testLogin()">Test Login</button>
+    <div id="result"></div>
+
+    <script>
+        async function testLogin() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing login...';
+            
+            try {
+                const response = await fetch('http://localhost:5001/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@school.com',
+                        password: 'admin123'
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Response:', data);
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <h2>Login Successful!</h2>
+                        <p>Token: ${data.token.substring(0, 50)}...</p>
+                        <p>User: ${data.user.firstName} ${data.user.lastName}</p>
+                        <p>Role: ${data.user.role}</p>
+                        <p>Email: ${data.user.email}</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<h2>Login Failed!</h2><p>${data.message}</p>`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `<h2>Error!</h2><p>${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

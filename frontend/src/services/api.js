@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1'
+// Default to backend's configured port (5000) unless overridden
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'
 
 console.log('API Base URL:', API_BASE_URL) // Debug log
 
@@ -140,7 +141,7 @@ export const adminAPI = {
   // Observations
   createObservation: (data) => api.post('/admin/observations', data),
   getStudentObservations: (studentId) => api.get(`/admin/students/${studentId}/observations`),
-  
+
   // Communications
   sendCommunication: (data) => api.post('/admin/communications', data),
 }
@@ -149,21 +150,21 @@ export const adminAPI = {
 export const parentAPI = {
   // Dashboard
   getDashboard: () => api.get('/parent/dashboard'),
-  
+
   // Student data
   getStudentAttendance: (studentId, params) => api.get(`/parent/students/${studentId}/attendance`, { params }),
   getStudentAcademic: (studentId) => api.get(`/parent/students/${studentId}/academic`),
   getStudentRisk: (studentId) => api.get(`/parent/students/${studentId}/risk`),
   getStudentInterventions: (studentId) => api.get(`/parent/students/${studentId}/interventions`),
-  
+
   // Communications
   getCommunications: (params) => api.get('/parent/communications', { params }),
   replyToCommunication: (communicationId, data) => api.post(`/parent/communications/${communicationId}/reply`, data),
   markCommunicationAsRead: (communicationId) => api.put(`/parent/communications/${communicationId}/read`),
-  
+
   // Profile
   updateProfile: (data) => api.put('/parent/profile', data),
-  
+
   // Admin: Link students to parent
   linkStudents: (parentId, studentIds) => api.post('/parent/link-students', { parentId, studentIds }),
 }
@@ -194,10 +195,10 @@ export const teacherAPI = {
   getClassStudents: (className) => api.get(`/teacher/classes/${className}/students`),
   getAtRiskStudents: () => api.get('/teacher/students/at-risk'),
   getStudentProfile: (studentId) => api.get(`/teacher/students/${studentId}/profile`),
-  
+
   // Attendance
-  getClassAttendance: (className, date) => api.get(`/teacher/classes/${className}/attendance`, { 
-    params: { date } 
+  getClassAttendance: (className, date) => api.get(`/teacher/classes/${className}/attendance`, {
+    params: { date }
   }),
   markBulkAttendance: (data) => api.post('/teacher/attendance/bulk', data),
   getAttendanceSummary: (className, startDate, endDate) => api.get(`/teacher/classes/${className}/attendance/summary`, {
@@ -206,19 +207,19 @@ export const teacherAPI = {
   getStudentAttendanceTrends: (studentId, months) => api.get(`/teacher/students/${studentId}/attendance/trends`, {
     params: { months }
   }),
-  
+
   // Academic Performance
   submitAcademicGrades: (data) => api.post('/teacher/academic/grades', data),
   getSavedExams: () => api.get('/teacher/academic/exams'),
   getExamDetails: (examId) => api.get(`/teacher/academic/exams/${examId}`),
-  
+
   // Observations
   getObservations: (params) => api.get('/teacher/observations', { params }),
   createObservation: (data) => api.post('/teacher/observations', data),
   updateObservation: (observationId, data) => api.put(`/teacher/observations/${observationId}`, data),
   deleteObservation: (observationId) => api.delete(`/teacher/observations/${observationId}`),
   getStudentObservations: (studentId) => api.get(`/teacher/students/${studentId}/observations`),
-  
+
   // Communications
   getCommunications: (params) => api.get('/teacher/communications', { params }),
   sendCommunication: (data) => api.post('/teacher/communications', data),

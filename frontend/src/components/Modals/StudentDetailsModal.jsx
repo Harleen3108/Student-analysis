@@ -81,10 +81,10 @@ const StudentDetailsModal = ({ isOpen, onClose, student, onEdit }) => {
                 <span className="text-gray-600">Class:</span>
                 <span className="font-medium">{student.class}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 col-span-2">
                 <Mail className="w-4 h-4 text-gray-500" />
                 <span className="text-gray-600">Email:</span>
-                <span className="font-medium">{student.email || 'Not provided'}</span>
+                <span className="font-medium break-all">{student.email || 'Not provided'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-gray-500" />

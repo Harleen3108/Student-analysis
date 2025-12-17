@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import Dark Mode Styles */
+@import './styles/dark-mode.css';
+
 @layer base {
   * {
     @apply border-gray-200;
@@ -9,6 +12,11 @@
   body {
     @apply bg-gray-50 text-gray-900 font-sans;
   }
+}
+
+/* Ensure dark mode can override base body colors */
+body.dark-mode {
+  @apply bg-gray-900 text-gray-100;
 }
 
 @layer components {
@@ -45,7 +53,6 @@
   }
 }
 
-
 @layer utilities {
   @keyframes slide-in-right {
     from {
@@ -60,5 +67,55 @@
   
   .animate-slide-in-right {
     animation: slide-in-right 0.3s ease-out;
+  }
+
+  /* Strong dark mode overrides so Tailwind classes get themed properly */
+  .dark-mode {
+    background-color: #020617 !important; /* slate-950 */
+    color: #f9fafb !important;
+  }
+
+  .dark-mode .bg-white,
+  .dark-mode .bg-gray-50,
+  .dark-mode .bg-gray-100 {
+    background-color: #020617 !important;
+  }
+
+  /* Inputs / search in dark mode */
+  .dark-mode .input,
+  .dark-mode input,
+  .dark-mode select {
+    background-color: #020617 !important;
+    border-color: #1f2937 !important;
+    color: #f9fafb !important;
+  }
+
+  .dark-mode .card {
+    background-color: #020617 !important;
+    border-color: #1f2937 !important;
+    color: #f9fafb !important;
+  }
+
+  /* Make borders dark gray instead of light */
+  .dark-mode .border-gray-200,
+  .dark-mode .border-gray-300,
+  .dark-mode .divide-gray-100 > * + * {
+    border-color: #1f2937 !important;
+  }
+
+  /* Table header and hover rows in dark mode */
+  .dark-mode thead {
+    background-color: #020617 !important;
+  }
+
+  .dark-mode tbody tr:hover {
+    background-color: #020617 !important;
+  }
+
+  .dark-mode .text-gray-900,
+  .dark-mode .text-gray-800,
+  .dark-mode .text-gray-700,
+  .dark-mode .text-gray-600 {
+    color: #e5e7eb !important;
   }
 }

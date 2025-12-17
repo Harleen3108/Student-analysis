@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from 'react-query'
 import { useLocation } from 'react-router-dom'
-import { Search, Filter, Plus, Users, Wifi, WifiOff } from 'lucide-react'
+import { Search, Filter, Plus, Users, Wifi, WifiOff, MoreVertical } from 'lucide-react'
 import { studentsAPI } from '../services/api'
 import { useSocket } from '../contexts/SocketContext'
+import { useTheme } from '../contexts/ThemeContext'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
 import Avatar from '../components/UI/Avatar'
 import AddStudentModal from '../components/Modals/AddStudentModal'
@@ -23,6 +24,8 @@ const Students = () => {
   const [isBulkUploadModalOpen, setIsBulkUploadModalOpen] = useState(false)
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [selectedStudentIds, setSelectedStudentIds] = useState([])
+  const [openActionMenuId, setOpenActionMenuId] = useState(null)
+  const { isDark } = useTheme()
   const queryClient = useQueryClient()
   const { socket, isConnected } = useSocket()
   const menuRef = useRef(null)
@@ -321,7 +324,13 @@ const Students = () => {
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input type="text" placeholder="Search students..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="input pl-10" />
+              <input
+                type="text"
+                placeholder="Search students..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input pl-10 border border-gray-300"
+              />
             </div>
           </div>
           <div className="sm:w-48">
@@ -454,30 +463,70 @@ const Students = () => {
                         {student.riskLevel}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => handleViewStudent(student)}
-                          className="text-primary-600 hover:text-primary-900 transition-colors"
-                          title="View Details"
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center relative w-12">
+                      <button
+                        onClick={() =>
+                          setOpenActionMenuId(
+                            openActionMenuId === student.id ? null : student.id
+                          )
+                        }
+                        className={`inline-flex items-center justify-center w-8 h-8 mx-auto rounded-full focus:outline-none ${
+                          isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                        }`}
+                        title="Actions"
+                      >
+                        <MoreVertical className="w-4 h-4 text-gray-500" />
+                      </button>
+
+                      {openActionMenuId === student.id && (
+                        <div
+                          className={`absolute right-0 mt-2 w-36 rounded-md shadow-lg z-20 border flex flex-col overflow-hidden ${
+                            isDark
+                              ? 'bg-gray-900 border-gray-700'
+                              : 'bg-white border-gray-200'
+                          }`}
                         >
-                          View
-                        </button>
-                        <button 
-                          onClick={() => handleEditStudent(student)}
-                          className="text-gray-600 hover:text-gray-900 transition-colors"
-                          title="Edit Student"
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteStudent(student)}
-                          className="text-red-600 hover:text-red-900 transition-colors"
-                          title="Delete Student"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                          <button
+                            onClick={() => {
+                              handleViewStudent(student)
+                              setOpenActionMenuId(null)
+                            }}
+                            className={`w-full text-left px-4 py-2 text-sm ${
+                              isDark
+                                ? 'text-gray-100 hover:bg-gray-800'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleEditStudent(student)
+                              setOpenActionMenuId(null)
+                            }}
+                            className={`w-full text-left px-4 py-2 text-sm ${
+                              isDark
+                                ? 'text-gray-100 hover:bg-gray-800'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleDeleteStudent(student)
+                              setOpenActionMenuId(null)
+                            }}
+                            className={`w-full text-left px-4 py-2 text-sm ${
+                              isDark
+                                ? 'text-red-400 hover:bg-gray-800'
+                                : 'text-red-600 hover:bg-red-50'
+                            }`}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
