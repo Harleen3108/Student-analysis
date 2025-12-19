@@ -19,6 +19,8 @@ import teacherRoutes from "./routes/teacherRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import parentRoutes from "./routes/parentRoutes.js";
 import debugRoutes from "./routes/debugRoutes.js";
+import meetingRoutes from "./routes/meetingRoutes.js";
+import communicationsRoutes from "./routes/communicationsRoutes.js";
 
 // Import middleware
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -146,6 +148,8 @@ app.use(`/api/${API_VERSION}/teacher`, teacherRoutes);
 app.use(`/api/${API_VERSION}/admin`, adminRoutes);
 app.use(`/api/${API_VERSION}/parent`, parentRoutes);
 app.use(`/api/${API_VERSION}/debug`, debugRoutes);
+app.use(`/api/${API_VERSION}/meetings`, meetingRoutes);
+app.use(`/api/${API_VERSION}/communications`, communicationsRoutes);
 
 // 404 handler
 app.use((req, res) => {

@@ -4,6 +4,7 @@ import Grade from "../models/Grade.js";
 import { AppError, asyncHandler } from "../middleware/errorHandler.js";
 import { uploadImage, deleteImage } from "../config/cloudinary.js";
 import { calculateRiskScore } from "../services/riskCalculator.js";
+import { sendRiskAlertToParents } from "../services/riskAlertService.js";
 import logger from "../utils/logger.js";
 
 // @desc    Get all students with filtering, sorting, and pagination
@@ -189,6 +190,9 @@ export const updateStudent = asyncHandler(async (req, res, next) => {
   // Set last updated by
   updateData.lastUpdatedBy = req.user._id;
 
+  // Store previous risk level before update
+  const previousRiskLevel = student.riskLevel;
+
   // Update student
   student = await Student.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
@@ -204,6 +208,17 @@ export const updateStudent = asyncHandler(async (req, res, next) => {
   logger.info(
     `Student updated: ${student.fullName} (${student.rollNumber}) by ${req.user.email}`
   );
+
+  // Send risk alert to parents if risk level is Medium, High, or Critical
+  if (['Medium', 'High', 'Critical'].includes(student.riskLevel)) {
+    try {
+      await sendRiskAlertToParents(student, previousRiskLevel);
+      logger.info(`✅ Risk alert sent for ${student.firstName} ${student.lastName}`);
+    } catch (alertError) {
+      logger.error('Failed to send risk alert:', alertError);
+      // Don't fail the update if alert fails
+    }
+  }
 
   res.status(200).json({
     status: "success",
@@ -347,6 +362,53 @@ export const getStudentTimeline = asyncHandler(async (req, res, next) => {
     status: "success",
     data: {
       timeline,
+    },
+  });
+});
+
+// @desc    Get next available roll number for a class/section
+// @route   GET /api/v1/students/next-roll-number/:section
+// @access  Private
+export const getNextRollNumber = asyncHandler(async (req, res, next) => {
+  const { section } = req.params;
+
+  if (!section) {
+    return next(new AppError("Section is required", 400));
+  }
+
+  // Find the highest roll number in this section
+  const lastStudent = await Student.findOne({ section })
+    .sort({ rollNumber: -1 })
+    .select("rollNumber")
+    .lean();
+
+  let nextRollNumber;
+  
+  if (lastStudent && lastStudent.rollNumber) {
+    // Extract the numeric part from the roll number
+    // Assuming format like "9A-001", "10B-015", etc.
+    const match = lastStudent.rollNumber.match(/(\d+)$/);
+    if (match) {
+      const lastNumber = parseInt(match[1]);
+      const nextNumber = lastNumber + 1;
+      // Pad with zeros to maintain 3 digits
+      nextRollNumber = `${section}-${String(nextNumber).padStart(3, '0')}`;
+    } else {
+      // If no match, start from 001
+      nextRollNumber = `${section}-001`;
+    }
+  } else {
+    // No students in this section yet, start from 001
+    nextRollNumber = `${section}-001`;
+  }
+
+  logger.info(`Next roll number for section ${section}: ${nextRollNumber}`);
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      section,
+      nextRollNumber,
     },
   });
 });

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from 'react-query'
+import { useNavigate } from 'react-router-dom'
 import { 
   AlertTriangle, 
   Users, 
@@ -19,6 +20,7 @@ import toast from 'react-hot-toast'
 import { useSocket } from '../../contexts/SocketContext'
 
 const AtRiskStudents = () => {
+  const navigate = useNavigate()
   const [selectedRiskLevel, setSelectedRiskLevel] = useState('All')
   const [selectedClass, setSelectedClass] = useState('All')
   const [showSendMessageModal, setShowSendMessageModal] = useState(false)
@@ -326,6 +328,7 @@ const AtRiskStudents = () => {
                     <button
                       onClick={() => handleViewProfile(student)}
                       className="btn-outline flex items-center gap-2 text-sm"
+                      onClick={() => navigate(`/teacher/students/${student._id || student.id}`)}
                     >
                       <Eye className="w-4 h-4" />
                       View Profile

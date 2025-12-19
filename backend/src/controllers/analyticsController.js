@@ -61,7 +61,7 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
       isActive: { $ne: false },
       riskLevel: { $in: ['High', 'Critical'] }
     })
-    .select('firstName lastName rollNumber section riskLevel riskScore')
+    .select('firstName lastName rollNumber section riskLevel riskScore photo')
     .limit(5)
     .lean();
 
@@ -71,7 +71,8 @@ export const getDashboardAnalytics = asyncHandler(async (req, res, next) => {
       class: student.section,
       rollNumber: student.rollNumber,
       riskLevel: student.riskLevel,
-      riskScore: student.riskScore || 0
+      riskScore: student.riskScore || 0,
+      photo: student.photo || null
     }));
 
     // Mock attendance trend data (you can replace with real data)

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from 'react-query'
+import { useNavigate } from 'react-router-dom'
 import { 
   User, 
   Search, 
@@ -23,6 +24,7 @@ import toast from 'react-hot-toast'
 
 const StudentProfiles = () => {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [selectedClass, setSelectedClass] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [riskFilter, setRiskFilter] = useState('')
@@ -421,10 +423,7 @@ const StudentProfiles = () => {
                       </div>
                     </div>
                     <button
-                      onClick={() => {
-                        setSelectedStudent(student)
-                        setView('detail')
-                      }}
+                      onClick={() => navigate(`/teacher/students/${student._id || student.id}`)}
                       className="btn-primary flex items-center gap-2"
                     >
                       <Eye className="w-4 h-4" />

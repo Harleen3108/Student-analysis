@@ -12,10 +12,10 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const [isDark, setIsDark] = useState(() => {
-    // Check localStorage first
-    const savedTheme = localStorage.getItem('theme')
-    if (savedTheme) {
-      return savedTheme === 'dark'
+    // Check localStorage first (using 'darkMode' key to match login page)
+    const savedTheme = localStorage.getItem('darkMode')
+    if (savedTheme !== null) {
+      return JSON.parse(savedTheme)
     }
     // Check system preference
     return window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -29,15 +29,16 @@ export const ThemeProvider = ({ children }) => {
     if (isDark) {
       body.classList.add('dark-mode')
       root.classList.add('dark-mode')
-      body.style.backgroundColor = '#111827'
-      body.style.color = '#f9fafb'
-      localStorage.setItem('theme', 'dark')
+      // Match login page dark mode colors (gray-900 to gray-800 gradient)
+      body.style.backgroundColor = '#111827' // gray-900
+      body.style.color = '#f3f4f6' // gray-100
+      localStorage.setItem('darkMode', JSON.stringify(true))
     } else {
       body.classList.remove('dark-mode')
       root.classList.remove('dark-mode')
       body.style.backgroundColor = ''
       body.style.color = ''
-      localStorage.setItem('theme', 'light')
+      localStorage.setItem('darkMode', JSON.stringify(false))
     }
   }, [isDark])
 

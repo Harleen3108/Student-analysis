@@ -27,6 +27,7 @@ import ParentInterventions from './pages/parent/Interventions'
 import ParentCommunications from './pages/parent/Communications'
 import ParentSupport from './pages/parent/Support'
 import ParentProfile from './pages/parent/Profile'
+import StudentProfile from './pages/StudentProfile'
 import LoadingSpinner from './components/UI/LoadingSpinner'
 
 function App() {
@@ -57,17 +58,20 @@ function App() {
       
       {/* Teacher Routes */}
       {user?.role === 'teacher' && (
-        <Route path="/teacher" element={<TeacherLayout />}>
-          <Route index element={<TeacherDashboard />} />
-          <Route path="dashboard" element={<TeacherDashboard />} />
-          <Route path="attendance" element={<AttendanceManagement />} />
-          <Route path="my-classes" element={<MyClasses />} />
-          <Route path="at-risk-students" element={<AtRiskStudents />} />
-          <Route path="academic-entry" element={<AcademicEntry />} />
-          <Route path="observations" element={<Observations />} />
-          <Route path="students" element={<StudentProfiles />} />
-          <Route path="communications" element={<Communications />} />
-        </Route>
+        <>
+          <Route path="/teacher" element={<TeacherLayout />}>
+            <Route index element={<TeacherDashboard />} />
+            <Route path="dashboard" element={<TeacherDashboard />} />
+            <Route path="attendance" element={<AttendanceManagement />} />
+            <Route path="my-classes" element={<MyClasses />} />
+            <Route path="at-risk-students" element={<AtRiskStudents />} />
+            <Route path="academic-entry" element={<AcademicEntry />} />
+            <Route path="observations" element={<Observations />} />
+            <Route path="students" element={<StudentProfiles />} />
+            <Route path="communications" element={<Communications />} />
+          </Route>
+          <Route path="/teacher/students/:id" element={<StudentProfile />} />
+        </>
       )}
       
       {/* Parent Routes */}
@@ -87,15 +91,18 @@ function App() {
       
       {/* Admin Routes */}
       {user?.role === 'admin' && (
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="students" element={<Students />} />
-          <Route path="risk-analysis" element={<RiskAnalysis />} />
-          <Route path="interventions" element={<Interventions />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="user-management" element={<UserManagement />} />
-          <Route path="bulk-upload" element={<BulkUpload />} />
-        </Route>
+        <>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="students" element={<Students />} />
+            <Route path="risk-analysis" element={<RiskAnalysis />} />
+            <Route path="interventions" element={<Interventions />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="user-management" element={<UserManagement />} />
+            <Route path="bulk-upload" element={<BulkUpload />} />
+          </Route>
+          <Route path="/students/:id" element={<StudentProfile />} />
+        </>
       )}
       
       {/* Fallback route */}

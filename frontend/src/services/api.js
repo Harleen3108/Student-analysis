@@ -58,6 +58,7 @@ export const studentsAPI = {
   update: (id, data) => api.put(`/students/${id}`, data),
   delete: (id) => api.delete(`/students/${id}`),
   getRiskAnalysis: (id) => api.get(`/students/${id}/risk-analysis`),
+  getNextRollNumber: (section) => api.get(`/students/next-roll-number/${section}`),
   bulkUpload: (formData) => {
     return api.post('/students/bulk-upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -169,6 +170,17 @@ export const parentAPI = {
   linkStudents: (parentId, studentIds) => api.post('/parent/link-students', { parentId, studentIds }),
 }
 
+// Meetings API
+export const meetingsAPI = {
+  getAll: (params) => api.get('/meetings', { params }),
+  getById: (id) => api.get(`/meetings/${id}`),
+  create: (data) => api.post('/meetings', data),
+  update: (id, data) => api.put(`/meetings/${id}`, data),
+  confirm: (id) => api.post(`/meetings/${id}/confirm`),
+  cancel: (id, reason) => api.post(`/meetings/${id}/cancel`, { reason }),
+  delete: (id) => api.delete(`/meetings/${id}`),
+}
+
 // Teacher API
 export const teacherAPI = {
   getDashboard: () => {
@@ -225,6 +237,14 @@ export const teacherAPI = {
   sendCommunication: (data) => api.post('/teacher/communications', data),
   getStudentCommunications: (studentId) => api.get(`/teacher/students/${studentId}/communications`),
   updateCommunicationStatus: (communicationId, data) => api.put(`/teacher/communications/${communicationId}/status`, data),
+}
+
+// Communications API (for contacting parents)
+export const communicationsAPI = {
+  sendEmail: (data) => api.post('/communications/send-email', data),
+  sendSMS: (data) => api.post('/communications/send-sms', data),
+  sendReport: (data) => api.post('/communications/send-report', data),
+  getHistory: (studentId) => api.get(`/communications/history/${studentId}`),
 }
 
 export default api

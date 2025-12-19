@@ -1,13 +1,13 @@
-import { useState } from 'react';
-import { X, Upload, User } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Upload, User, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { studentsAPI } from '../../services/api';
 
 const AddStudentModal = ({ isOpen, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     rollNumber: '',
-    class: '',
     section: '',
     email: '',
     phone: '',
@@ -38,6 +38,38 @@ const AddStudentModal = ({ isOpen, onClose, onSubmit }) => {
   const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [generatingRollNumber, setGeneratingRollNumber] = useState(false);
+
+  // Auto-generate roll number when class/section changes
+  useEffect(() => {
+    if (formData.section && isOpen) {
+      generateRollNumber();
+    }
+  }, [formData.section, isOpen]);
+
+  const generateRollNumber = async () => {
+    if (!formData.section) {
+      return;
+    }
+
+    setGeneratingRollNumber(true);
+    try {
+      const response = await studentsAPI.getNextRollNumber(formData.section);
+      const nextRollNumber = response.data.data.nextRollNumber;
+      
+      setFormData(prev => ({
+        ...prev,
+        rollNumber: nextRollNumber
+      }));
+      
+      toast.success(`Roll number ${nextRollNumber} assigned`);
+    } catch (error) {
+      console.error('Error generating roll number:', error);
+      toast.error('Failed to generate roll number');
+    } finally {
+      setGeneratingRollNumber(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -90,8 +122,8 @@ const AddStudentModal = ({ isOpen, onClose, onSubmit }) => {
       return;
     }
 
-    if (!formData.class || !formData.section) {
-      toast.error('Please select class and section');
+    if (!formData.section) {
+      toast.error('Please select class/section');
       return;
     }
 
@@ -120,7 +152,6 @@ const AddStudentModal = ({ isOpen, onClose, onSubmit }) => {
         firstName: '',
         lastName: '',
         rollNumber: '',
-        class: '',
         section: '',
         email: '',
         phone: '',
@@ -250,15 +281,26 @@ const AddStudentModal = ({ isOpen, onClose, onSubmit }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Roll Number <span className="text-red-500">*</span>
+                    <span className="text-xs text-gray-500 ml-2">(Auto-generated)</span>
                   </label>
-                  <input
-                    type="text"
-                    name="rollNumber"
-                    value={formData.rollNumber}
-                    onChange={handleInputChange}
-                    className="input"
-                    placeholder="Enter roll number"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="rollNumber"
+                      value={formData.rollNumber}
+                      readOnly
+                      className="input bg-gray-50 cursor-not-allowed"
+                      placeholder="Select class first"
+                    />
+                    {generatingRollNumber && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <RefreshCw className="w-4 h-4 text-primary-600 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Roll number is automatically assigned based on class
+                  </p>
                 </div>
 
                 <div>
@@ -292,11 +334,11 @@ const AddStudentModal = ({ isOpen, onClose, onSubmit }) => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Class <span className="text-red-500">*</span>
+                    Class/Section <span className="text-red-500">*</span>
                   </label>
                   <select
-                    name="class"
-                    value={formData.class}
+                    name="section"
+                    value={formData.section}
                     onChange={handleInputChange}
                     className="input"
                   >
@@ -310,22 +352,7 @@ const AddStudentModal = ({ isOpen, onClose, onSubmit }) => {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Section <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="section"
-                    value={formData.section}
-                    onChange={handleInputChange}
-                    className="input"
-                  >
-                    <option value="">Select section</option>
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                    <option value="C">C</option>
-                  </select>
-                </div>
+
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

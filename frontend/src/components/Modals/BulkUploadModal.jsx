@@ -80,12 +80,13 @@ const BulkUploadModal = ({ isOpen, onClose, onSubmit }) => {
   }
 
   const downloadTemplate = () => {
-    // Simple CSV template that matches the bulk upload expectations:
-    // name, class, attendance, risk (optional), academicScore (optional)
-    const csvContent = `name,class,attendance,risk,academicScore
-John Doe,10A,92,Low,85
-Jane Smith,10B,68,High,45
-Rahul Kumar,9A,75,Medium,60`
+    // Comprehensive CSV template matching Add Student form
+    // Roll numbers will be auto-generated based on class/section
+    const csvContent = `firstName,lastName,middleName,class,section,email,phone,dateOfBirth,gender,bloodGroup,street,city,state,pincode,fatherName,fatherPhone,fatherEmail,fatherOccupation,fatherEducation,motherName,motherPhone,motherEmail,motherOccupation,motherEducation,guardianName,guardianPhone,guardianEmail,guardianRelation,siblingsCount,siblingsInSchool,familyIncomeLevel,distanceFromSchool,transportationMode,hasHealthIssues,healthDetails,hasBehavioralIssues,behavioralDetails,hasFamilyProblems,familyProblemDetails,hasEconomicDistress,economicDistressDetails,previousDropoutAttempts,attendance,academicScore,admissionNumber,dateOfAdmission,previousSchoolName,previousSchoolAddress,previousSchoolClass
+Aarav,Sharma,,11,A,aarav.sharma@email.com,9876543210,2008-05-15,Male,O+,123 Main St,Mumbai,Maharashtra,400001,Mr. Rajesh Sharma,9876543210,rajesh.sharma@email.com,Business,Graduate,Mrs. Priya Sharma,9876543211,priya.sharma@email.com,Teacher,Graduate,,,,,2,1,Middle Income,3,School Bus,No,,No,,No,,No,,0,92,85,ADM2024001,2024-04-01,,,
+Priya,Patel,,11,A,priya.patel@email.com,9876543212,2008-08-20,Female,A+,456 Park Ave,Delhi,Delhi,110001,Mr. Amit Patel,9876543212,amit.patel@email.com,Engineer,Post Graduate,Mrs. Neha Patel,9876543213,neha.patel@email.com,Doctor,Post Graduate,,,,,1,0,High Income,5,Private Vehicle,No,,No,,No,,No,,0,88,78,ADM2024002,2024-04-01,,,
+Rahul,Kumar,,11,B,rahul.kumar@email.com,9876543214,2008-03-10,Male,B+,789 Lake Rd,Bangalore,Karnataka,560001,Mr. Suresh Kumar,9876543214,suresh.kumar@email.com,Farmer,Secondary,Mrs. Sunita Kumar,9876543215,sunita.kumar@email.com,Homemaker,Primary,,,,,3,2,Low Income,8,Public Transport,No,,No,,Yes,Financial difficulties,Yes,Low family income,0,75,60,ADM2024003,2024-04-01,,,
+Ananya,Singh,,11,B,ananya.singh@email.com,9876543216,2008-11-25,Female,AB+,321 Hill St,Pune,Maharashtra,411001,Mr. Vikram Singh,9876543216,vikram.singh@email.com,Government Employee,Graduate,Mrs. Kavita Singh,9876543217,kavita.singh@email.com,Nurse,Graduate,,,,,1,1,Middle Income,4,School Bus,No,,No,,No,,No,,0,68,45,ADM2024004,2024-04-01,,,`
 
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
@@ -97,7 +98,7 @@ Rahul Kumar,9A,75,Medium,60`
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
     
-    toast.success('Template downloaded successfully!')
+    toast.success('Template downloaded! Fill in all available fields or leave blank for defaults.')
   }
 
   if (!isOpen) return null
@@ -126,8 +127,11 @@ Rahul Kumar,9A,75,Medium,60`
                 <ul className="text-sm text-blue-800 space-y-1">
                   <li>• Use Excel (.xlsx, .xls) or CSV format</li>
                   <li>• Maximum file size: 5MB</li>
-                  <li>• Download template for correct format</li>
-                  <li>• Ensure all required fields are filled</li>
+                  <li>• Download template for all available fields</li>
+                  <li>• Roll numbers auto-generated based on class/section</li>
+                  <li>• Required: firstName, lastName, class, section, fatherName, fatherPhone</li>
+                  <li>• Optional fields default to "N/A" if empty</li>
+                  <li>• Parent accounts created automatically with email</li>
                 </ul>
               </div>
             </div>

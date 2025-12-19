@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from 'react-query'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Search, Filter, Plus, Users, Wifi, WifiOff, MoreVertical } from 'lucide-react'
 import { studentsAPI } from '../services/api'
 import { useSocket } from '../contexts/SocketContext'
@@ -15,6 +15,7 @@ import toast from 'react-hot-toast'
 
 const Students = () => {
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [filterClass, setFilterClass] = useState('All')
   const [filterRisk, setFilterRisk] = useState('All Risks')
@@ -129,20 +130,9 @@ const Students = () => {
     }
   }
 
-  const handleViewStudent = async (student) => {
-    try {
-      const response = await studentsAPI.getById(student.id)
-      if (response.data.success) {
-        setSelectedStudent(response.data.data)
-        setIsDetailsModalOpen(true)
-        toast.success(`Loaded details for ${student.firstName} ${student.lastName}`)
-      }
-    } catch (error) {
-      // If API call fails, use the student data we already have
-      setSelectedStudent(student)
-      setIsDetailsModalOpen(true)
-      console.warn('Failed to load detailed student data, using basic data:', error)
-    }
+  const handleViewStudent = (student) => {
+    // Navigate to the student profile page
+    navigate(`/students/${student._id || student.id}`)
   }
 
   const handleEditStudent = (student) => {

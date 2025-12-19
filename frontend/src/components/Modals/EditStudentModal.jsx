@@ -22,12 +22,13 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
     if (isOpen && student) {
       setValue('firstName', student.firstName || '')
       setValue('lastName', student.lastName || '')
+      setValue('middleName', student.middleName || '')
       setValue('rollNumber', student.rollNumber || '')
-      setValue('class', student.class || '')
+      setValue('section', student.section || student.class || '')
       setValue('email', student.email || '')
       setValue('phone', student.phone || '')
-      setValue('attendance', student.attendance || 100)
-      setValue('academicScore', student.academicScore || 0)
+      setValue('attendancePercentage', student.attendancePercentage || student.attendance || 0)
+      setValue('overallPercentage', student.overallPercentage || student.academicScore || 0)
       
       // Set image preview if student has a photo (but don't set imageFile - that's only for new uploads)
       if (student.photo) {
@@ -74,12 +75,13 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
       const updateData = {
         firstName: data.firstName?.trim(),
         lastName: data.lastName?.trim(),
+        middleName: data.middleName?.trim() || undefined,
         rollNumber: data.rollNumber?.trim(),
-        class: data.class,
+        section: data.section?.trim(),
         email: data.email?.trim() || undefined,
         phone: data.phone?.trim() || undefined,
-        attendance: data.attendance ? Number(data.attendance) : undefined,
-        academicScore: data.academicScore ? Number(data.academicScore) : undefined,
+        attendancePercentage: data.attendancePercentage ? Number(data.attendancePercentage) : undefined,
+        overallPercentage: data.overallPercentage ? Number(data.overallPercentage) : undefined,
       }
       
       // Only send photo if a new image file was uploaded
@@ -183,15 +185,15 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                First Name
+                First Name *
               </label>
               <input
                 {...register('firstName', { required: 'First name is required' })}
                 className="input"
-                placeholder="Enter first name"
+                placeholder="First name"
               />
               {errors.firstName && (
                 <p className="text-red-600 text-sm mt-1">{errors.firstName.message}</p>
@@ -200,12 +202,23 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Last Name
+                Middle Name
+              </label>
+              <input
+                {...register('middleName')}
+                className="input"
+                placeholder="Middle name"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Last Name *
               </label>
               <input
                 {...register('lastName', { required: 'Last name is required' })}
                 className="input"
-                placeholder="Enter last name"
+                placeholder="Last name"
               />
               {errors.lastName && (
                 <p className="text-red-600 text-sm mt-1">{errors.lastName.message}</p>
@@ -229,23 +242,30 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Class
+              Class/Section *
             </label>
             <select
-              {...register('class', { required: 'Class is required' })}
+              {...register('section', { required: 'Class/Section is required' })}
               className="input"
             >
-              <option value="">Select class</option>
-              <option value="9A">Class 9A</option>
-              <option value="9B">Class 9B</option>
-              <option value="10A">Class 10A</option>
-              <option value="10B">Class 10B</option>
-              <option value="11A">Class 11A</option>
-              <option value="11B">Class 11B</option>
+              <option value="">Select class/section</option>
+              <option value="9A">Class 9-A</option>
+              <option value="9B">Class 9-B</option>
+              <option value="9C">Class 9-C</option>
+              <option value="10A">Class 10-A</option>
+              <option value="10B">Class 10-B</option>
+              <option value="10C">Class 10-C</option>
+              <option value="11A">Class 11-A</option>
+              <option value="11B">Class 11-B</option>
+              <option value="11C">Class 11-C</option>
+              <option value="12A">Class 12-A</option>
+              <option value="12B">Class 12-B</option>
+              <option value="12C">Class 12-C</option>
             </select>
-            {errors.class && (
-              <p className="text-red-600 text-sm mt-1">{errors.class.message}</p>
+            {errors.section && (
+              <p className="text-red-600 text-sm mt-1">{errors.section.message}</p>
             )}
+            <p className="text-xs text-gray-500 mt-1">Format: Grade + Section (e.g., 11A for Class 11-A)</p>
           </div>
 
           <div>
@@ -293,18 +313,19 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
                 Attendance (%)
               </label>
               <input
-                {...register('attendance', { 
+                {...register('attendancePercentage', { 
                   min: { value: 0, message: 'Attendance cannot be negative' },
                   max: { value: 100, message: 'Attendance cannot exceed 100%' }
                 })}
                 type="number"
+                step="0.01"
                 className="input"
-                placeholder="Enter attendance percentage"
+                placeholder="0-100"
                 min="0"
                 max="100"
               />
-              {errors.attendance && (
-                <p className="text-red-600 text-sm mt-1">{errors.attendance.message}</p>
+              {errors.attendancePercentage && (
+                <p className="text-red-600 text-sm mt-1">{errors.attendancePercentage.message}</p>
               )}
             </div>
 
@@ -313,18 +334,19 @@ const EditStudentModal = ({ isOpen, onClose, onSubmit, student }) => {
                 Academic Score (%)
               </label>
               <input
-                {...register('academicScore', { 
+                {...register('overallPercentage', { 
                   min: { value: 0, message: 'Score cannot be negative' },
                   max: { value: 100, message: 'Score cannot exceed 100%' }
                 })}
                 type="number"
+                step="0.01"
                 className="input"
-                placeholder="Enter academic percentage"
+                placeholder="0-100"
                 min="0"
                 max="100"
               />
-              {errors.academicScore && (
-                <p className="text-red-600 text-sm mt-1">{errors.academicScore.message}</p>
+              {errors.overallPercentage && (
+                <p className="text-red-600 text-sm mt-1">{errors.overallPercentage.message}</p>
               )}
             </div>
           </div>

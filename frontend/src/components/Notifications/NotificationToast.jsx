@@ -53,6 +53,8 @@ const NotificationToast = () => {
     // Navigate based on notification type
     if (notification.type === 'communication') {
       navigate('/parent/communications')
+    } else if (notification.type === 'Parent Meeting') {
+      navigate('/parent/meetings')
     }
     removeNotification(notification.id)
   }
@@ -61,6 +63,8 @@ const NotificationToast = () => {
     switch (type) {
       case 'communication':
         return <MessageSquare className="w-5 h-5" />
+      case 'Parent Meeting':
+        return <Calendar className="w-5 h-5" />
       case 'alert':
         return <AlertCircle className="w-5 h-5" />
       case 'event':
@@ -106,6 +110,16 @@ const NotificationToast = () => {
                 <p className="text-xs opacity-75 mt-1">
                   Student: {notification.data.studentName}
                 </p>
+              )}
+              {notification.type === 'Parent Meeting' && notification.data && (
+                <div className="text-xs opacity-75 mt-2 space-y-0.5">
+                  {notification.data.topic && <p>Topic: {notification.data.topic}</p>}
+                  {notification.data.scheduledDate && notification.data.scheduledTime && (
+                    <p>When: {new Date(notification.data.scheduledDate).toLocaleDateString()} at {notification.data.scheduledTime}</p>
+                  )}
+                  {notification.data.location && <p>Where: {notification.data.location}</p>}
+                  {notification.data.organizer && <p>Organized by: {notification.data.organizer} ({notification.data.organizerRole})</p>}
+                </div>
               )}
             </div>
             <button

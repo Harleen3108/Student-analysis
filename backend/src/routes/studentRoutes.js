@@ -8,6 +8,8 @@ import User from '../models/User.js';
 import Class from '../models/Class.js';
 import logger from '../utils/logger.js';
 import { getIO } from '../socket/socketHandler.js';
+import { sendEmail } from '../services/emailService.js';
+import { sendRiskAlertToParents } from '../services/riskAlertService.js';
 
 const router = express.Router();
 
@@ -108,12 +110,15 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
       totalRecords: studentsData.length,
       successCount: 0,
       errorCount: 0,
-      errors: []
+      errors: [],
+      parentsCreated: 0,
+      parentsLinked: 0
     };
 
     // Process each student record
     for (let i = 0; i < studentsData.length; i++) {
       const rawRow = studentsData[i];
+      let currentRollNumber = 'Unknown'; // Store roll number for error reporting
 
       try {
         // Normalize keys to be case-insensitive and whitespace-safe
@@ -163,6 +168,22 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
           lastName = nameParts.slice(1).join(' ') || 'Student';
         }
 
+        // Get class/section - handle both combined (e.g., "11A") and separate columns
+        let sectionValue;
+        const classField = getField('class', 'Class');
+        const sectionField = getField('section', 'Section');
+        
+        if (classField && sectionField) {
+          // Separate columns: combine them (e.g., class="11", section="A" -> "11A")
+          sectionValue = `${classField}${sectionField}`.toString().toUpperCase().replace(/\s+/g, '');
+        } else {
+          // Combined column or fallback
+          sectionValue = (getField('class', 'section', 'Class', 'Section') || '10A')
+            .toString()
+            .toUpperCase()
+            .replace(/\s+/g, '');
+        }
+
         // Generate a roll number if not provided
         let rollNumber = getField('rollNumber', 'rollno', 'roll', 'roll number', 'Roll no.');
         
@@ -182,13 +203,30 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
         }
         
         if (!rollNumber) {
-          // Use class (e.g., 10A) + index-based suffix to keep it readable
-          const classCode = (getField('class', 'section', 'Class', 'Section') || '10A')
-            .toString()
-            .toUpperCase()
-            .replace(/\s+/g, '');
-          rollNumber = `ST${classCode}${Date.now()}_${i}`;
+          // Auto-generate sequential roll number for this section
+          const lastStudent = await Student.findOne({ section: sectionValue })
+            .sort({ rollNumber: -1 })
+            .select('rollNumber')
+            .lean();
+
+          if (lastStudent && lastStudent.rollNumber) {
+            const match = lastStudent.rollNumber.match(/(\d+)$/);
+            if (match) {
+              const lastNumber = parseInt(match[1]);
+              const nextNumber = lastNumber + 1;
+              rollNumber = `${sectionValue}-${String(nextNumber).padStart(3, '0')}`;
+            } else {
+              rollNumber = `${sectionValue}-001`;
+            }
+          } else {
+            rollNumber = `${sectionValue}-001`;
+          }
+          
+          logger.info(`✅ Auto-generated roll number: ${rollNumber} for section ${sectionValue}`);
         }
+
+        // Store roll number for error reporting
+        currentRollNumber = rollNumber;
 
         // Debug logging for first row to help troubleshoot
         if (i === 0) {
@@ -301,43 +339,113 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
 
         // Debug logging after extraction
         if (i === 0) {
-          logger.info(`✅ Extracted values - Name: ${firstName} ${lastName}, Roll: ${rollNumber}, Class: ${getField('class', 'section')}, Attendance: ${attendancePercentage}%, Academic: ${overallPercentage}%, Risk: ${riskLevel} (${riskScore})`);
+          logger.info(`✅ Extracted values - Name: ${firstName} ${lastName}, Roll: ${rollNumber}, Section: ${sectionValue}, Attendance: ${attendancePercentage}%, Academic: ${overallPercentage}%, Risk: ${riskLevel} (${riskScore})`);
         }
 
-        // Create student data
+        // Helper function to validate and clean phone numbers
+        const cleanPhone = (phoneValue) => {
+          if (!phoneValue) return '0000000000';
+          const phoneStr = String(phoneValue).replace(/\D/g, ''); // Remove non-digits
+          if (phoneStr.length === 10 && /^\d{10}$/.test(phoneStr)) {
+            return phoneStr;
+          }
+          return '0000000000';
+        };
+
+        // Helper to get value or default
+        const getValue = (value, defaultValue = 'N/A') => {
+          return value && String(value).trim() !== '' ? String(value).trim() : defaultValue;
+        };
+
+        // Create comprehensive student data matching Add Student form
         const studentData = {
+          // Personal Information
           firstName: String(firstName).trim(),
           lastName: String(lastName).trim(),
+          middleName: getValue(getField('middleName', 'middle name'), ''),
           rollNumber: rollNumber.toString().toUpperCase().trim(),
-          admissionNumber: row.admissionNumber || `ADM${Date.now()}_${i}`,
-          section: getField('class', 'section') || '10A',
-          email: row.email?.toLowerCase().trim(),
-          phone: row.phone?.toString().trim(),
-          dateOfBirth: row.dateOfBirth ? new Date(row.dateOfBirth) : new Date('2010-01-01'),
-          gender: row.gender || 'Male',
+          admissionNumber: getValue(getField('admissionNumber', 'admission number', 'admission no'), `ADM${Date.now()}_${i}`),
+          section: sectionValue,
+          email: getField('email', 'studentEmail', 'student email')?.toLowerCase().trim() || undefined,
+          phone: cleanPhone(getField('phone', 'studentPhone', 'student phone')),
+          dateOfBirth: getField('dateOfBirth', 'dob', 'date of birth') ? new Date(getField('dateOfBirth', 'dob', 'date of birth')) : new Date('2010-01-01'),
+          dateOfAdmission: getField('dateOfAdmission', 'admission date') ? new Date(getField('dateOfAdmission', 'admission date')) : new Date(),
+          gender: getValue(getField('gender'), 'Male'),
+          bloodGroup: getField('bloodGroup', 'blood group') || undefined,
+
+          // Address
           address: {
-            street: row.address || 'Unknown',
-            city: 'Unknown',
-            state: 'Unknown',
-            pincode: '000000'
+            street: getValue(getField('street', 'address', 'address street'), 'N/A'),
+            city: getValue(getField('city', 'address city'), 'N/A'),
+            state: getValue(getField('state', 'address state'), 'N/A'),
+            pincode: getValue(getField('pincode', 'pin code', 'address pincode'), '000000')
           },
+
+          // Father Information
           father: {
-            name: row.parentName || row.fatherName || 'Father Name',
-            phone: row.parentPhone || row.fatherPhone || row.phone || '0000000000',
-            email: row.parentEmail || row.fatherEmail || row.email
+            name: getValue(getField('fatherName', 'father name', 'parentName', 'parent name'), 'N/A'),
+            phone: cleanPhone(getField('fatherPhone', 'father phone', 'parentPhone', 'parent phone')),
+            email: getField('fatherEmail', 'father email', 'parentEmail', 'parent email')?.toLowerCase().trim() || undefined,
+            occupation: getValue(getField('fatherOccupation', 'father occupation'), 'N/A'),
+            education: getField('fatherEducation', 'father education') || undefined,
+            income: getField('fatherIncome', 'father income') ? Number(getField('fatherIncome', 'father income')) : undefined
           },
+
+          // Mother Information
           mother: {
-            name: row.motherName || 'Mother Name',
-            phone: row.motherPhone || row.phone || '0000000000'
+            name: getValue(getField('motherName', 'mother name'), 'N/A'),
+            phone: cleanPhone(getField('motherPhone', 'mother phone')),
+            email: getField('motherEmail', 'mother email')?.toLowerCase().trim() || undefined,
+            occupation: getValue(getField('motherOccupation', 'mother occupation'), 'N/A'),
+            education: getField('motherEducation', 'mother education') || undefined,
+            income: getField('motherIncome', 'mother income') ? Number(getField('motherIncome', 'mother income')) : undefined
           },
-          familyIncomeLevel: 'Middle Income',
-          distanceFromSchool: 5,
-          transportationMode: 'School Bus',
+
+          // Guardian Information (optional)
+          guardian: getField('guardianName', 'guardian name') ? {
+            name: getValue(getField('guardianName', 'guardian name'), ''),
+            phone: cleanPhone(getField('guardianPhone', 'guardian phone')),
+            email: getField('guardianEmail', 'guardian email')?.toLowerCase().trim() || undefined,
+            relation: getValue(getField('guardianRelation', 'guardian relation'), '')
+          } : undefined,
+
+          // Previous School (optional)
+          previousSchool: getField('previousSchoolName', 'previous school') ? {
+            name: getValue(getField('previousSchoolName', 'previous school'), ''),
+            address: getValue(getField('previousSchoolAddress', 'previous school address'), ''),
+            lastClass: getValue(getField('previousSchoolClass', 'previous class'), '')
+          } : undefined,
+
+          // Siblings
+          siblings: {
+            count: getField('siblingsCount', 'siblings count', 'siblings') ? Number(getField('siblingsCount', 'siblings count', 'siblings')) : 0,
+            inSchool: getField('siblingsInSchool', 'siblings in school') ? Number(getField('siblingsInSchool', 'siblings in school')) : 0
+          },
+
+          // Family & Risk Factors
+          familyIncomeLevel: getValue(getField('familyIncomeLevel', 'family income', 'income level'), 'Middle Income'),
+          distanceFromSchool: getField('distanceFromSchool', 'distance') ? Number(getField('distanceFromSchool', 'distance')) : 5,
+          transportationMode: getValue(getField('transportationMode', 'transportation', 'transport'), 'School Bus'),
+          
+          // Health & Behavioral
+          hasHealthIssues: getField('hasHealthIssues', 'health issues') === 'Yes' || getField('hasHealthIssues', 'health issues') === true,
+          healthDetails: getValue(getField('healthDetails', 'health details'), ''),
+          hasBehavioralIssues: getField('hasBehavioralIssues', 'behavioral issues') === 'Yes' || getField('hasBehavioralIssues', 'behavioral issues') === true,
+          behavioralDetails: getValue(getField('behavioralDetails', 'behavioral details'), ''),
+          hasFamilyProblems: getField('hasFamilyProblems', 'family problems') === 'Yes' || getField('hasFamilyProblems', 'family problems') === true,
+          familyProblemDetails: getValue(getField('familyProblemDetails', 'family problem details'), ''),
+          hasEconomicDistress: getField('hasEconomicDistress', 'economic distress') === 'Yes' || getField('hasEconomicDistress', 'economic distress') === true,
+          economicDistressDetails: getValue(getField('economicDistressDetails', 'economic distress details'), ''),
+          previousDropoutAttempts: getField('previousDropoutAttempts', 'dropout attempts') ? Number(getField('previousDropoutAttempts', 'dropout attempts')) : 0,
+
+          // Academic Performance
           attendancePercentage,
           overallPercentage,
           riskScore,
           riskLevel,
-          status: 'Active',
+          
+          // Status
+          status: getValue(getField('status'), 'Active'),
           isActive: true
         };
 
@@ -345,17 +453,106 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
         const newStudent = new Student(studentData);
         await newStudent.save();
         
-        results.successCount++;
         logger.info(`✅ Bulk upload - Student created: ${studentData.rollNumber}`);
+
+        // *** AUTO-CREATE PARENT ACCOUNT ***
+        if (studentData.father && studentData.father.email) {
+          try {
+            const parentEmail = studentData.father.email.toLowerCase().trim();
+            
+            // Check if parent account already exists
+            const existingParent = await User.findOne({ email: parentEmail });
+            
+            if (existingParent) {
+              // Link student to existing parent
+              if (!existingParent.children.includes(newStudent._id)) {
+                existingParent.children.push(newStudent._id);
+                await existingParent.save();
+                results.parentsLinked++;
+                logger.info(`✅ Bulk upload - Student linked to existing parent: ${parentEmail}`);
+              }
+            } else {
+              // Create new parent account
+              const parentPassword = `${firstName}2025`;
+              
+              const newParentData = {
+                firstName: studentData.father.name.split(' ')[0] || 'Parent',
+                lastName: studentData.father.name.split(' ').slice(1).join(' ') || lastName,
+                email: parentEmail,
+                phone: studentData.father.phone,
+                password: parentPassword,
+                role: 'parent',
+                children: [newStudent._id],
+                isActive: true,
+                notificationPreferences: {
+                  email: true,
+                  sms: true,
+                  inApp: true
+                }
+              };
+
+              const newParent = new User(newParentData);
+              await newParent.save();
+              
+              results.parentsCreated++;
+              logger.info(`✅ Bulk upload - Parent account created: ${parentEmail} with password: ${parentPassword}`);
+
+              // Send welcome email to parent
+              try {
+                await sendEmail({
+                  to: parentEmail,
+                  subject: 'Welcome to Student Dropout Prevention System - Parent Portal',
+                  html: `
+                    <h2>Welcome to Student Dropout Prevention System</h2>
+                    <p>Dear ${studentData.father.name},</p>
+                    <p>A parent account has been created for you to monitor your child's academic progress.</p>
+                    <h3>Your Login Credentials:</h3>
+                    <p><strong>Email:</strong> ${parentEmail}</p>
+                    <p><strong>Password:</strong> ${parentPassword}</p>
+                    <p><strong>Student:</strong> ${firstName} ${lastName} (${rollNumber})</p>
+                    <p>Please login to access your child's information and receive important updates.</p>
+                    <p>You can change your password after logging in.</p>
+                    <br>
+                    <p>Best regards,<br>School Administration</p>
+                  `
+                });
+                logger.info(`✅ Bulk upload - Welcome email sent to: ${parentEmail}`);
+              } catch (emailError) {
+                logger.warn(`⚠️ Bulk upload - Failed to send welcome email to ${parentEmail}: ${emailError.message}`);
+              }
+            }
+          } catch (parentError) {
+            logger.warn(`⚠️ Bulk upload - Failed to create parent account for ${studentData.rollNumber}: ${parentError.message}`);
+            // Don't fail the whole upload if parent creation fails
+          }
+        }
+
+        // Send risk alert if student is at Medium, High, or Critical risk
+        if (['Medium', 'High', 'Critical'].includes(studentData.riskLevel)) {
+          try {
+            await sendRiskAlertToParents(newStudent);
+            logger.info(`✅ Bulk upload - Risk alert sent for ${studentData.rollNumber}`);
+          } catch (alertError) {
+            logger.warn(`⚠️ Bulk upload - Failed to send risk alert for ${studentData.rollNumber}: ${alertError.message}`);
+            // Don't fail the upload if alert fails
+          }
+        }
+        
+        results.successCount++;
+        logger.info(`✅ Bulk upload - Completed processing: ${studentData.rollNumber}`);
 
       } catch (error) {
         results.errorCount++;
+        const errorMsg = error.message || error.toString() || 'Unknown error';
         results.errors.push({
           row: i + 1,
-          rollNumber: row.rollNumber,
-          error: error.message
+          rollNumber: currentRollNumber,
+          error: errorMsg
         });
-        logger.error(`❌ Bulk upload error for row ${i + 1}:`, error.message);
+        logger.error(`❌ Bulk upload error for row ${i + 1} (Roll: ${currentRollNumber}): ${errorMsg}`);
+        if (error.stack) {
+          logger.error(`Stack trace: ${error.stack}`);
+        }
       }
     }
 
@@ -373,9 +570,18 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
       logger.error('Socket emission error:', socketError);
     }
 
+    // Build success message
+    let message = `Bulk upload completed. ${results.successCount} students added successfully.`;
+    if (results.parentsCreated > 0) {
+      message += ` ${results.parentsCreated} parent accounts created.`;
+    }
+    if (results.parentsLinked > 0) {
+      message += ` ${results.parentsLinked} students linked to existing parents.`;
+    }
+
     res.json({
       success: true,
-      message: `Bulk upload completed. ${results.successCount} students added successfully.`,
+      message: message,
       data: results
     });
 
@@ -389,6 +595,63 @@ router.post('/bulk-upload', upload.single('file'), handleMulterError, async (req
     res.status(500).json({
       success: false,
       message: 'Bulk upload failed',
+      error: error.message
+    });
+  }
+});
+
+// Get next available roll number for a section
+router.get('/next-roll-number/:section', async (req, res) => {
+  try {
+    const { section } = req.params;
+
+    if (!section) {
+      return res.status(400).json({
+        success: false,
+        message: 'Section is required'
+      });
+    }
+
+    // Find the highest roll number in this section
+    const lastStudent = await Student.findOne({ section })
+      .sort({ rollNumber: -1 })
+      .select('rollNumber')
+      .lean();
+
+    let nextRollNumber;
+    
+    if (lastStudent && lastStudent.rollNumber) {
+      // Extract the numeric part from the roll number
+      // Assuming format like "9A-001", "10B-015", etc.
+      const match = lastStudent.rollNumber.match(/(\d+)$/);
+      if (match) {
+        const lastNumber = parseInt(match[1]);
+        const nextNumber = lastNumber + 1;
+        // Pad with zeros to maintain 3 digits
+        nextRollNumber = `${section}-${String(nextNumber).padStart(3, '0')}`;
+      } else {
+        // If no match, start from 001
+        nextRollNumber = `${section}-001`;
+      }
+    } else {
+      // No students in this section yet, start from 001
+      nextRollNumber = `${section}-001`;
+    }
+
+    logger.info(`Next roll number for section ${section}: ${nextRollNumber}`);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        section,
+        nextRollNumber,
+      },
+    });
+  } catch (error) {
+    logger.error('Error generating next roll number:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate roll number',
       error: error.message
     });
   }
@@ -727,6 +990,17 @@ router.post('/', async (req, res) => {
       status: savedStudent.status,
       photo: savedStudent.photo
     };
+
+    // *** SEND RISK ALERT TO PARENTS ***
+    if (['Medium', 'High', 'Critical'].includes(savedStudent.riskLevel)) {
+      try {
+        await sendRiskAlertToParents(savedStudent);
+        logger.info(`✅ Risk alert sent for new student: ${savedStudent.rollNumber}`);
+      } catch (alertError) {
+        logger.error('❌ Failed to send risk alert:', alertError);
+        // Don't fail student creation if alert fails
+      }
+    }
 
     // *** CRITICAL: Emit socket event for real-time updates ***
     try {

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from 'react-query'
+import { useNavigate } from 'react-router-dom'
 import { 
   Users, 
   AlertTriangle, 
@@ -16,6 +17,7 @@ import toast from 'react-hot-toast'
 
 const MyClasses = () => {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [selectedClass, setSelectedClass] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -278,6 +280,7 @@ const MyClasses = () => {
                               toast.success(`Viewing profile for ${student.firstName} ${student.lastName}`)
                             }}
                             className="text-primary-600 hover:text-primary-900"
+                            onClick={() => navigate(`/teacher/students/${student._id || student.id}`)}
                           >
                             View Profile
                           </button>

@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from 'react-query'
-import { Search, Filter, Plus, Users, Shield, Edit, Trash2, UserCheck, Eye } from 'lucide-react'
+import { Search, Filter, Plus, Users, Shield, Edit, Trash2, UserCheck, Eye, MoreVertical } from 'lucide-react'
 import { usersAPI, analyticsAPI } from '../services/api'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
 import Avatar from '../components/UI/Avatar'
@@ -9,12 +9,26 @@ import UserDetailsModal from '../components/Modals/UserDetailsModal'
 import toast from 'react-hot-toast'
 
 const UserManagement = () => {
+  const [searchInput, setSearchInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [filterRole, setFilterRole] = useState('All')
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
+  const [openActionMenuId, setOpenActionMenuId] = useState(null)
+  const menuRef = useRef(null)
   const queryClient = useQueryClient()
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpenActionMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const { data: usersData, isLoading, error, refetch } = useQuery(
     ['users', searchTerm, filterRole],
@@ -196,8 +210,13 @@ const UserManagement = () => {
               <input
                 type="text"
                 placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setSearchTerm(searchInput)
+                  }
+                }}
                 className="input pl-10"
               />
             </div>
@@ -215,6 +234,13 @@ const UserManagement = () => {
               <option value="parent">Parent</option>
             </select>
           </div>
+          <button 
+            onClick={() => setSearchTerm(searchInput)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Search className="w-4 h-4" />
+            Search
+          </button>
           <button 
             onClick={() => refetch()}
             className="btn-outline flex items-center gap-2"
@@ -297,48 +323,72 @@ const UserManagement = () => {
                       {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => {
-                            setSelectedUserId(user._id || user.id)
-                            setIsDetailsModalOpen(true)
-                          }}
-                          className="text-primary-600 hover:text-primary-900 transition-colors flex items-center gap-1"
-                          title="View Details"
+                      <div className="relative" ref={openActionMenuId === (user._id || user.id) ? menuRef : null}>
+                        <button
+                          onClick={() =>
+                            setOpenActionMenuId(
+                              openActionMenuId === (user._id || user.id) ? null : (user._id || user.id)
+                            )
+                          }
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                         >
-                          <Eye className="w-4 h-4" />
-                          View
+                          <MoreVertical className="w-5 h-5 text-gray-600" />
                         </button>
-                        <button 
-                          onClick={() => handleToggleStatus(user._id || user.id, user.isActive)}
-                          className={`${user.isActive ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'} transition-colors`}
-                          title={user.isActive ? 'Deactivate' : 'Activate'}
-                        >
-                          {user.isActive ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button 
-                          onClick={() => {
-                            // This would open an edit modal with user data pre-filled
-                            toast.success(`Edit mode for ${user.firstName} ${user.lastName}`)
-                          }}
-                          className="text-gray-600 hover:text-gray-900 transition-colors"
-                          title="Edit User"
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteUser(user._id || user.id, `${user.firstName} ${user.lastName}`, user.role)}
-                          className={`transition-colors flex items-center gap-1 ${
-                            user.role === 'admin' 
-                              ? 'text-gray-400 cursor-not-allowed' 
-                              : 'text-red-600 hover:text-red-900'
-                          }`}
-                          title={user.role === 'admin' ? 'Cannot delete admin users' : 'Delete User'}
-                          disabled={user.role === 'admin'}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete
-                        </button>
+
+                        {openActionMenuId === (user._id || user.id) && (
+                          <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                            <div className="py-1">
+                              <button
+                                onClick={() => {
+                                  setSelectedUserId(user._id || user.id)
+                                  setIsDetailsModalOpen(true)
+                                  setOpenActionMenuId(null)
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <Eye className="w-4 h-4" />
+                                View Details
+                              </button>
+                              <button
+                                onClick={() => {
+                                  toast.info(`Edit functionality for ${user.firstName} ${user.lastName} - Coming soon!`)
+                                  setOpenActionMenuId(null)
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <Edit className="w-4 h-4" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleToggleStatus(user._id || user.id, user.isActive)
+                                  setOpenActionMenuId(null)
+                                }}
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${
+                                  user.isActive ? 'text-orange-600' : 'text-green-600'
+                                }`}
+                              >
+                                <UserCheck className="w-4 h-4" />
+                                {user.isActive ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDeleteUser(user._id || user.id, `${user.firstName} ${user.lastName}`, user.role)
+                                  setOpenActionMenuId(null)
+                                }}
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-red-50 flex items-center gap-2 ${
+                                  user.role === 'admin'
+                                    ? 'text-gray-400 cursor-not-allowed'
+                                    : 'text-red-600'
+                                }`}
+                                disabled={user.role === 'admin'}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>

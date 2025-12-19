@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { useNavigate } from 'react-router-dom'
-import { Search, AlertTriangle, X, Save, Send } from 'lucide-react'
-import { studentsAPI, interventionsAPI, adminAPI } from '../services/api'
+import { Search, AlertTriangle, X, Save, Send, Info } from 'lucide-react'
+import { studentsAPI, interventionsAPI, adminAPI, meetingsAPI } from '../services/api'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
+import ScheduleMeetingModal from '../components/Modals/ScheduleMeetingModal'
 import toast from 'react-hot-toast'
 import { useSocket } from '../contexts/SocketContext'
 
@@ -14,6 +15,8 @@ const RiskAnalysis = () => {
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [showAddNoteModal, setShowAddNoteModal] = useState(false)
   const [showSendMessageModal, setShowSendMessageModal] = useState(false)
+  const [showScheduleMeetingModal, setShowScheduleMeetingModal] = useState(false)
+  const [hoveredFactor, setHoveredFactor] = useState(null)
   const [noteData, setNoteData] = useState({
     title: '',
     description: '',
@@ -51,6 +54,18 @@ const RiskAnalysis = () => {
       const attendance = student.attendance || student.attendancePercentage || 100
       const academic = student.academicScore || student.overallPercentage || 0
       
+      // Use stored risk factors from backend, or calculate from actual data (no random values)
+      const riskFactors = student.riskFactors || {}
+      
+      // Calculate risk percentages from actual student data
+      const attendanceRisk = riskFactors.attendance || Math.max(0, Math.min(100, 100 - attendance))
+      const academicRisk = riskFactors.academic || Math.max(0, Math.min(100, 100 - academic))
+      
+      // Use stored risk factors or calculate from boolean flags
+      const behavioralRisk = riskFactors.behavioral || (student.hasBehavioralIssues ? 70 : 20)
+      const financialRisk = riskFactors.financial || (student.hasEconomicDistress ? 75 : 25)
+      const familyRisk = riskFactors.family || (student.hasFamilyProblems ? 65 : 20)
+      
       return {
         id: student.id || student._id,
         name: `${student.firstName} ${student.lastName}`,
@@ -59,13 +74,13 @@ const RiskAnalysis = () => {
         riskScore: student.riskScore || 0,
         riskLevel: student.riskLevel || 'Low',
         factors: {
-          attendance: Math.max(0, 100 - attendance),
-          academic: Math.max(0, 100 - academic),
-          behavioral: Math.floor(Math.random() * 50) + 20, // Mock behavioral data
-          financial: Math.floor(Math.random() * 60) + 10, // Mock financial data
-          family: Math.floor(Math.random() * 40) + 15 // Mock family data
+          attendance: Math.round(attendanceRisk),
+          academic: Math.round(academicRisk),
+          behavioral: Math.round(behavioralRisk),
+          financial: Math.round(financialRisk),
+          family: Math.round(familyRisk)
         },
-        lastUpdated: new Date().toISOString().split('T')[0]
+        lastUpdated: student.updatedAt ? new Date(student.updatedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
       }
     })
   
@@ -115,6 +130,78 @@ const RiskAnalysis = () => {
     if (score >= 50) return 'bg-yellow-500'
     if (score >= 30) return 'bg-orange-500'
     return 'bg-green-500'
+  }
+
+  const getRecommendationTitle = (factor, score) => {
+    const severity = score >= 70 ? 'Critical' : score >= 50 ? 'High' : score >= 30 ? 'Moderate' : 'Low'
+    
+    const titles = {
+      attendance: {
+        Critical: 'Immediate Attendance Intervention Required',
+        High: 'Urgent Attendance Monitoring Needed',
+        Moderate: 'Monitor Attendance Closely',
+        Low: 'Maintain Good Attendance'
+      },
+      academic: {
+        Critical: 'Emergency Academic Support Required',
+        High: 'Intensive Academic Intervention Needed',
+        Moderate: 'Additional Academic Support Recommended',
+        Low: 'Continue Academic Progress'
+      },
+      behavioral: {
+        Critical: 'Immediate Behavioral Counseling Required',
+        High: 'Behavioral Intervention Needed',
+        Moderate: 'Monitor Behavioral Patterns',
+        Low: 'Positive Behavioral Reinforcement'
+      },
+      financial: {
+        Critical: 'Urgent Financial Assistance Required',
+        High: 'Financial Support Needed',
+        Moderate: 'Explore Financial Aid Options',
+        Low: 'Financial Situation Stable'
+      },
+      family: {
+        Critical: 'Immediate Family Support Required',
+        High: 'Family Counseling Recommended',
+        Moderate: 'Monitor Family Situation',
+        Low: 'Family Support Adequate'
+      }
+    }
+    
+    return titles[factor]?.[severity] || 'Monitor Situation'
+  }
+
+  const getRecommendationText = (factor, score) => {
+    const recommendations = {
+      attendance: {
+        high: 'Schedule immediate parent meeting. Implement daily attendance tracking. Investigate reasons for absences. Consider home visits if necessary.',
+        moderate: 'Send weekly attendance reports to parents. Follow up on each absence. Identify and address barriers to attendance.',
+        low: 'Continue monitoring attendance patterns. Recognize and reward good attendance. Maintain communication with parents.'
+      },
+      academic: {
+        high: 'Arrange immediate remedial classes. Assign peer tutors. Schedule parent-teacher conference. Develop personalized learning plan.',
+        moderate: 'Provide additional study materials. Offer after-school tutoring. Monitor progress weekly. Identify specific subject weaknesses.',
+        low: 'Encourage continued academic excellence. Provide enrichment opportunities. Maintain regular progress monitoring.'
+      },
+      behavioral: {
+        high: 'Schedule counseling sessions immediately. Involve school counselor and parents. Develop behavior intervention plan. Monitor daily.',
+        moderate: 'Regular check-ins with counselor. Implement positive behavior support. Communicate concerns with parents.',
+        low: 'Continue positive reinforcement. Maintain supportive environment. Recognize good behavior regularly.'
+      },
+      financial: {
+        high: 'Connect family with financial aid resources immediately. Explore scholarship opportunities. Provide school supplies assistance.',
+        moderate: 'Assess financial aid eligibility. Provide information on available support programs. Monitor for additional needs.',
+        low: 'Keep family informed of available resources. Maintain open communication about any financial concerns.'
+      },
+      family: {
+        high: 'Arrange family counseling immediately. Connect with social services. Provide emotional support resources. Schedule regular check-ins.',
+        moderate: 'Monitor family situation closely. Offer counseling resources. Maintain supportive communication with student and family.',
+        low: 'Continue supportive relationship. Keep communication channels open. Recognize family strengths.'
+      }
+    }
+    
+    const level = score >= 50 ? 'high' : score >= 30 ? 'moderate' : 'low'
+    return recommendations[factor]?.[level] || 'Continue monitoring and provide support as needed.'
   }
 
   return (
@@ -252,54 +339,55 @@ const RiskAnalysis = () => {
                 <p className="text-sm text-gray-500">Last updated: {selectedStudent.lastUpdated}</p>
               </div>
 
-              {/* Risk Factors Breakdown */}
+              {/* Risk Factors Breakdown with Hover Recommendations */}
               <div className="card p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Risk Factors Analysis</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  Risk Factors Analysis
+                  <Info className="w-4 h-4 text-gray-400" title="Hover over each factor to see recommendations" />
+                </h3>
                 <div className="space-y-4">
                   {Object.entries(selectedStudent.factors).map(([factor, score]) => (
-                    <div key={factor}>
+                    <div 
+                      key={factor}
+                      className="relative"
+                      onMouseEnter={() => setHoveredFactor(factor)}
+                      onMouseLeave={() => setHoveredFactor(null)}
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-700 capitalize">
                           {factor} Risk
                         </span>
                         <span className="text-sm font-medium text-gray-900">{score}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2 cursor-pointer">
                         <div
-                          className={`h-2 rounded-full ${getFactorColor(score)}`}
+                          className={`h-2 rounded-full transition-all ${getFactorColor(score)}`}
                           style={{ width: `${score}%` }}
                         ></div>
                       </div>
+                      
+                      {/* Hover Recommendation Tooltip */}
+                      {hoveredFactor === factor && (
+                        <div className="absolute z-10 mt-2 p-4 bg-white border border-gray-200 rounded-lg shadow-lg w-full">
+                          <div className="flex items-start gap-3">
+                            <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                              score >= 70 ? 'bg-red-500' : 
+                              score >= 50 ? 'bg-orange-500' : 
+                              score >= 30 ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}></div>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-gray-900 mb-1">
+                                {getRecommendationTitle(factor, score)}
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                {getRecommendationText(factor, score)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
-                </div>
-              </div>
-
-              {/* Recommendations */}
-              <div className="card p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recommended Actions</h3>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg border border-red-200">
-                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
-                    <div>
-                      <p className="text-sm font-medium text-red-800">Immediate Intervention Required</p>
-                      <p className="text-sm text-red-700">Schedule parent meeting and counseling session</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
-                    <div>
-                      <p className="text-sm font-medium text-yellow-800">Monitor Attendance</p>
-                      <p className="text-sm text-yellow-700">Track daily attendance and follow up on absences</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                    <div>
-                      <p className="text-sm font-medium text-blue-800">Academic Support</p>
-                      <p className="text-sm text-blue-700">Provide additional tutoring and study materials</p>
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -307,13 +395,7 @@ const RiskAnalysis = () => {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <button 
                   onClick={() => {
-                    // Navigate to students page with the selected student
-                    navigate('/students', { 
-                      state: { 
-                        openStudentId: selectedStudent.id,
-                        studentData: selectedStudent 
-                      } 
-                    })
+                    navigate(`/students/${selectedStudent._id || selectedStudent.id}`)
                   }}
                   className="btn-primary"
                 >
@@ -367,15 +449,7 @@ const RiskAnalysis = () => {
                 </button>
                 <button 
                   onClick={() => {
-                    // This would integrate with calendar/scheduling system
-                    const meetingData = {
-                      student: selectedStudent.name,
-                      type: 'Risk Assessment Meeting',
-                      date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                      participants: ['Parent', 'Teacher', 'Counselor']
-                    }
-                    console.log('Scheduling meeting:', meetingData)
-                    toast.success(`Meeting scheduled for ${selectedStudent.name}`)
+                    setShowScheduleMeetingModal(true)
                   }}
                   className="btn-outline"
                 >
@@ -714,6 +788,54 @@ const RiskAnalysis = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Schedule Meeting Modal */}
+      {showScheduleMeetingModal && selectedStudent && (
+        <ScheduleMeetingModal
+          isOpen={showScheduleMeetingModal}
+          onClose={() => setShowScheduleMeetingModal(false)}
+          onSubmit={async (meetingData) => {
+            try {
+              const response = await meetingsAPI.create(meetingData)
+              
+              if (response.data.success) {
+                toast.success(`Meeting scheduled successfully with parents of ${selectedStudent.name}!`)
+                
+                // Send real-time notification via socket
+                if (socket && response.data.data?.meeting) {
+                  const meeting = response.data.data.meeting
+                  
+                  // Notify all parents
+                  meeting.parents.forEach(parent => {
+                    socket.emit('notification:send', {
+                      userId: parent._id,
+                      type: 'Parent Meeting',
+                      title: 'Meeting Scheduled',
+                      message: `A meeting has been scheduled regarding ${selectedStudent.name} on ${meetingData.scheduledDate} at ${meetingData.scheduledTime}`,
+                      priority: meetingData.priority || 'Normal',
+                      data: {
+                        meetingId: meeting._id,
+                        studentName: selectedStudent.name,
+                        topic: meetingData.topic,
+                        scheduledDate: meetingData.scheduledDate,
+                        scheduledTime: meetingData.scheduledTime,
+                        location: meetingData.location,
+                      }
+                    })
+                  })
+                }
+                
+                setShowScheduleMeetingModal(false)
+              }
+            } catch (error) {
+              toast.error(error.response?.data?.message || 'Failed to schedule meeting')
+              console.error('Meeting scheduling error:', error)
+              throw error
+            }
+          }}
+          student={selectedStudent}
+        />
       )}
     </div>
   )
